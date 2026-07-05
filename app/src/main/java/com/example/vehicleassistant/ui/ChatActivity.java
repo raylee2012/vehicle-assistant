@@ -14,6 +14,9 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.airbnb.lottie.LottieAnimationView;
+import com.airbnb.lottie.LottieDrawable;
+import com.example.vehicleassistant.R;
 import com.example.vehicleassistant.databinding.ActivityChatBinding;
 
 public class ChatActivity extends AppCompatActivity {
@@ -29,6 +32,8 @@ public class ChatActivity extends AppCompatActivity {
     private ProgressBar pbDownload;
     private Button btnDownload;
     private TextView tvDownloadStatus;
+    private Button btnMic;
+    private LottieAnimationView lottieWaveform;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,6 +49,13 @@ public class ChatActivity extends AppCompatActivity {
         pbDownload = binding.pbDownload;
         btnDownload = binding.btnDownload;
         tvDownloadStatus = binding.tvDownloadStatus;
+        btnMic = binding.btnMic;
+        lottieWaveform = binding.lottieWaveform;
+
+        // 初始化 Lottie 动画
+        lottieWaveform.setAnimation(R.raw.lottie_waveform);
+        lottieWaveform.setRepeatCount(LottieDrawable.INFINITE);
+        lottieWaveform.setRepeatMode(LottieDrawable.RESTART);
 
         viewModel = new ViewModelProvider(this,
                 ViewModelProvider.AndroidViewModelFactory.getInstance(this.getApplication()))
@@ -56,10 +68,11 @@ public class ChatActivity extends AppCompatActivity {
         // 状态文本
         viewModel.getStatusText().observe(this, status -> tvStatus.setText(status));
 
-        // 输入启用状态
+        // 输入启用状态（整合 VoiceKit 就绪状态控制麦克风可见性）
         viewModel.getInputEnabled().observe(this, enabled -> {
-            etInput.setEnabled(enabled);
-            btnSend.setEnabled(enabled);
+            Boolean vkReady = viewModel.getVoiceKitReady().getValue();
+            btnMic.setVisibility(enabled != null && enabled && vkReady != null && vkReady ? View.VISIBLE : View.GONE);
+            updateInputState();
         });
 
         // 下载区域可见性
@@ -86,6 +99,32 @@ public class ChatActivity extends AppCompatActivity {
         // 发送按钮
         btnSend.setOnClickListener(v -> sendMessage());
 
+        // 麦克风按钮 — 录音中再点 = 手动结束
+        btnMic.setOnClickListener(v -> viewModel.toggleListening());
+
+        // ASR 录音状态 → 驱动 麦克风/Lottie 互斥显示 + 输入禁用
+        viewModel.getAsrListening().observe(this, listening -> {
+            if (listening != null && listening) {
+                btnMic.setVisibility(View.GONE);
+                lottieWaveform.setVisibility(View.VISIBLE);
+                lottieWaveform.playAnimation();
+            } else {
+                lottieWaveform.cancelAnimation();
+                lottieWaveform.setVisibility(View.GONE);
+                btnMic.setVisibility(View.VISIBLE);
+            }
+            updateInputState();
+        });
+
+        // ASR 识别结果 → 填入输入框
+        viewModel.getAsrResult().observe(this, result -> {
+            if (result != null && !result.isEmpty()) {
+                etInput.setText(result);
+                etInput.setSelection(result.length());
+                viewModel.onAsrResultConsumed();
+            }
+        });
+
         // 键盘发送
         etInput.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_SEND) {
@@ -104,11 +143,27 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
+    // 辅助方法：输入框和发送按钮只有在"模型就绪 + 不在录音中"才可用
+    private void updateInputState() {
+        Boolean inputOk = viewModel.getInputEnabled().getValue();
+        Boolean asrOn = viewModel.getAsrListening().getValue();
+        boolean enabled = inputOk != null && inputOk && (asrOn == null || !asrOn);
+        etInput.setEnabled(enabled);
+        btnSend.setEnabled(enabled);
+    }
+
     private void sendMessage() {
         String text = etInput.getText().toString().trim();
         if (text.isEmpty()) return;
         etInput.setText("");
         viewModel.sendMessage(text);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // 场景1: 录音中切后台 → 自动停止
+        viewModel.stopListeningOnPause();
     }
 
     @Override
