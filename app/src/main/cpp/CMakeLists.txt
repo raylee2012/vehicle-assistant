@@ -7,44 +7,55 @@ project("llama_jni")
 set(LLAMA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../llama.cpp")
 
 # ═══════════════════════════════════════════════════════════════
-# CPU-only 交叉编译配置
-# 目标设备：RedMi Note Pro 13 (骁龙 7s Gen 2, ARMv8.2-A)
-# 启用 NEON SIMD + dotprod 点积指令 + fp16 半精度浮点加速
-# Vulkan 暂不可用：需要宿主原生 C++17 编译器 + SPIRV-Headers
+# OpenCL + CPU 混合配置
+# 目标设备：RedMi Note Pro 13 (骁龙 7s Gen 2, Adreno 710)
+# Adreno OpenCL 比 Vulkan 稳定可靠
 # ═══════════════════════════════════════════════════════════════
-set(GGML_CPU ON CACHE BOOL "启用 CPU 后端" FORCE)
-set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "ARM 指令集优化目标（Cortex-A78 = ARMv8.2-A）" FORCE)
 
-# Disable repack — 避免 Q4_K gemm 中的内存对齐 crash
+# CPU 后端（ARM NEON/dotprod/fp16 优化，作为 fallback）
+set(GGML_CPU ON CACHE BOOL "启用 CPU 后端" FORCE)
+set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "ARM 指令集优化目标" FORCE)
 set(GGML_CPU_REPACK OFF CACHE BOOL "禁用 repack 防止 SIMD 对齐 crash" FORCE)
 
-# 禁用 Android 不支持的编译选项
-set(GGML_OPENMP OFF CACHE BOOL "NDK 的 OpenMP 依赖解析有问题，禁用" FORCE)
+# OpenCL 后端（Adreno 专用 kernel）
+set(GGML_OPENCL ON CACHE BOOL "启用 OpenCL GPU 加速" FORCE)
+set(GGML_OPENCL_USE_ADRENO_KERNELS ON CACHE BOOL "Adreno 专用 kernel" FORCE)
+set(GGML_OPENCL_EMBED_KERNELS ON CACHE BOOL "嵌入 OpenCL kernel" FORCE)
+
+# OpenCL 头文件和库 — 交叉编译 Android arm64-v8a
+# stub libOpenCL.so 仅构建时链接，dev 端 /vendor/lib64/libOpenCL.so 运行时解析
+set(OpenCL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../opencl_include" CACHE INTERNAL "OpenCL headers")
+set(OpenCL_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/../../../../opencl_stub/libOpenCL.so" CACHE INTERNAL "OpenCL stub (build only)")
+set(OpenCL_LIBRARIES "${OpenCL_LIBRARY}" CACHE INTERNAL "")
+set(OpenCL_INCLUDE_DIRS "${OpenCL_INCLUDE_DIR}" CACHE INTERNAL "")
+
+# 允许 NDK 未定义的 OpenCL 符号（运行时由设备端 libOpenCL.so 解析）
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--allow-shlib-undefined")
+
+# 禁用 Vulkan 和其他 GPU 后端
+set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
+set(GGML_CUDA OFF CACHE BOOL "" FORCE)
+set(GGML_METAL OFF CACHE BOOL "" FORCE)
+set(GGML_OPENMP OFF CACHE BOOL "NDK OpenMP 依赖问题" FORCE)
 set(GGML_LLAMAFILE OFF CACHE BOOL "Llamafile 不支持 Android" FORCE)
 
-# 禁用所有 GPU 后端（Android 只用 CPU 推理）
-set(GGML_CUDA OFF CACHE BOOL "" FORCE)
-set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
-set(GGML_METAL OFF CACHE BOOL "" FORCE)
-
-# 静态链接：所有目标库打包进一个 .so，减少 APK 内的文件数量
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "生成静态库 .a" FORCE)
-set(LLAMA_BUILD_COMMON ON CACHE BOOL "编译 llama-common（chat template 等）" FORCE)
+# 静态链接
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "生成静态库" FORCE)
+set(LLAMA_BUILD_COMMON ON CACHE BOOL "编译 llama-common" FORCE)
 set(LLAMA_OPENSSL OFF CACHE BOOL "不需要 SSL" FORCE)
 
-# 引入 llama.cpp 源码编译（产出 libllama.a, libggml.a, libllama-common.a）
+# 引入 llama.cpp 源码编译
 add_subdirectory(${LLAMA_DIR} ${CMAKE_CURRENT_BINARY_DIR}/llama)
 
-# JNI 动态库：Java 通过 System.loadLibrary("llama_jni") 加载
+# JNI 动态库
 add_library(llama_jni SHARED llama_jni.cpp)
 
-# 头文件路径：llama.h, ggml.h, common 工具
 target_include_directories(llama_jni PRIVATE
     ${LLAMA_DIR}/include
     ${LLAMA_DIR}/common
     ${LLAMA_DIR}/ggml/include
 )
 
-# 链接依赖：llama + ggml + llama-common + Android log
+# 链接依赖：llama + ggml + llama-common + OpenCL + Android log
 find_library(log-lib log)
 target_link_libraries(llama_jni llama llama-common ggml ${log-lib})

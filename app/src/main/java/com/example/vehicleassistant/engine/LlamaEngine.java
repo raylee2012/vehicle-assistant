@@ -9,6 +9,13 @@ import com.example.vehicleassistant.model.ModelConfig;
 public class LlamaEngine {
 
     static {
+        // OpenCL 必须先加载，llama_jni 链接依赖 libOpenCL.so
+        try {
+            System.loadLibrary("OpenCL");
+        } catch (UnsatisfiedLinkError e) {
+            // OpenCL 不可用时（非 Adreno 设备），回退到 CPU
+            android.util.Log.w("LlamaEngine", "OpenCL not available, falling back to CPU");
+        }
         System.loadLibrary("llama_jni");
     }
 

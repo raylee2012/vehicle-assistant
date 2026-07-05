@@ -11,6 +11,8 @@
         android:theme="@style/Theme.VehicleAssistant"
         android:supportsRtl="true">
 
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+
         <activity
             android:name="com.example.vehicleassistant.ui.ChatActivity"
             android:exported="true"
