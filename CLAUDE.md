@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-车载语音助手 — 基于本地大模型的智能车控对话助手，运行在 RedMi Note Pro 13 (Android) 上。通过 llama.cpp JNI 推理 Qwen2.5-1.5B Q4_K_M 量化模型，使用 Function Calling 机制解析用户意图并执行车控方法。
+车载语音助手 — 基于本地大模型的智能车控对话助手，运行在 RedMi Note Pro 13 (Android) 上。通过 llama.cpp JNI 推理 Qwen2.5-0.5B Q4_K_M 量化模型，使用 Function Calling 机制解析用户意图并执行车控方法。
 
 ## 构建与运行
 
@@ -43,17 +43,17 @@ Gradle 分发源使用腾讯云镜像，Maven 仓库使用阿里云镜像。JDK 
 └──────────────────────────────────────────────────┘
 ```
 
-## 核心数据流（两次推理）
+## 核心数据流
 
 ```
 用户输入
-  → PromptBuilder (ChatML 格式 + Function Schema + 车辆状态)
-  → LlamaEngine.infer()         ← 第一次推理：意图提取 → JSON
-  → OutputParser.parse(json)    ← JSON 容错 / 闲聊兜底
-  → CommandPipeline.execute()   ← 去重 → 参数校验 → 危险操作检查 → 幂等检查 → mock 执行
-  → PromptBuilder (注入执行结果)
-  → LlamaEngine.infer()         ← 第二次推理：自然语言回复
-  → ContextManager.save()       ← 本轮对话存入滑动窗口
+  → VideoSearchHelper.extractKeyword()  ← 视频搜索拦截（命中→卡片+跳过模型）
+  → MockCommandExtractor.extract()      ← 关键词匹配（命中→直接执行，不走模型）
+  → (未命中) LlamaEngine.infer()       ← 模型推理：意图提取→JSON 或 闲聊文本
+  → OutputParser.parse(json)           ← JSON 容错
+  → CommandPipeline.execute()          ← 执行车控
+  → LlamaEngine.infer()                ← 自然语言回复生成
+  → ContextManager.save()              ← 本轮对话存入滑动窗口
 ```
 
 ## 各层详情
@@ -68,19 +68,20 @@ Gradle 分发源使用腾讯云镜像，Maven 仓库使用阿里云镜像。JDK 
 - `LlamaEngine` — JNI 桥接层，Java 侧提供 `init(ModelConfig)`, `infer(String):String`, `release()`, `isLoaded()`，所有方法 synchronized
 - `llama_jni.cpp` — 完整接入 llama.cpp (b9871)，CPU-only 静态链接 libllama + libggml + libllama-common，ARM NEON/dotprod/fp16 优化
 - `libllama_jni.so` — Debug ~83MB（unstripped），Release ~15-20MB，APK 从 5.6MB → 16MB
-- `MockCommandExtractor` — 当模型文件不存在时的关键词匹配兜底，覆盖全部 23 个车控方法
+- `MockCommandExtractor` — 关键词匹配意图提取（优先执行，模型仅兜底），覆盖全部 23 个车控方法，按标点分句避免跨指令污染
+- `VideoSearchHelper` — 视频搜索关键词提取 + 抖音 deeplink 跳转（正式版/极速版双 scheme）
 - `PromptBuilder` — 组装 Qwen2.5 ChatML 格式 (`<|im_start|>system/user/assistant<|im_end|>`)，区分第一次推理(意图提取)和第二次推理(结果汇总)
 - `OutputParser` — 优先尝试 JSON 数组解析，修复常见格式错误(尾逗号、单引号)，失败则兜底到纯文本(闲聊兜底)
 
 ### Agent 层
-- `AgentManager` — 对话编排核心，单线程 ExecutorService 保证消息串行处理，pendingInput 队列处理快速连发
+- `AgentManager` — 对话编排核心，视频搜索→车控关键词→模型推理三级流水线，单线程 ExecutorService 保证消息串行处理，pendingInput 队列处理快速连发
 - `ContextManager` — 滑动窗口 4096 tokens(预留 1200 给 prompt+输出)，最多 20 轮，从最早消息成对裁剪
 - `CommandPipeline` — 批量去重(同 target 后者覆盖前者) + 顺序执行 + 部分失败策略(nonCritical 跳过/critical 中断)
 
 ### UI 层
 - `MainViewModel` — AndroidViewModel，后台线程初始化引擎，LiveData 驱动状态文本和输入启用状态
 - `ChatActivity` — ViewBinding (`ActivityChatBinding`)，IME_ACTION_SEND 键盘发送，AdapterDataObserver 自动滚动
-- `ChatAdapter` — 双 ViewType RecyclerView(用户右/助手左)，助手消息可包含动态注入的 ExecutionCard 列表
+- `ChatAdapter` — 三 ViewType RecyclerView(用户/助手/视频搜索卡片)，助手消息可展开思考过程（折叠/展开/耗时统计）
 
 ## 上下文窗口预算 (4096 tokens)
 
@@ -97,10 +98,10 @@ Gradle 分发源使用腾讯云镜像，Maven 仓库使用阿里云镜像。JDK 
 ## 模型与 llama.cpp
 
 - llama.cpp 作为 git submodule (`llama.cpp/`) 管理，tag `b9871`
-- 模型不打包进 APK。首次启动检查 `ExternalFilesDir/models/qwen2.5-1.5b-instruct-q4_k_m.gguf`
-- 模型未找到时显示下载界面（HuggingFace 主地址 + ModelScope 备用镜像）
-- 模型也未加载时 `AgentManager` 自动使用 `MockCommandExtractor` 关键词匹配兜底
-- 真实推理和 mock 之间无感切换：骨架占位检测 → mock 覆盖 → 真实模型加载后自动走 llama.cpp
+- 模型不打包进 APK。首次启动检查 `ExternalFilesDir/models/qwen2.5-0.5b-instruct-q4_k_m.gguf`
+- 模型未找到时显示下载界面（HuggingFace 主地址 + ModelScope 备用镜像），约 760MB
+- 意图提取优先用 `MockCommandExtractor` 关键词匹配，模型仅在关键词未覆盖时兜底
+- 模型主要用于闲聊和车控结果的自然语言汇总（第二次推理）
 
 ## 设计约束
 
