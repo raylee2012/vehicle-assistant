@@ -5,7 +5,6 @@ import android.os.Looper;
 import android.util.Log;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
@@ -24,21 +23,13 @@ public class ModelDownloadManager {
         void onError(String message);
     }
 
-    public static final String DEFAULT_MODEL_URL =
-        "https://modelscope.cn/models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/master/qwen2.5-0.5b-instruct-q4_k_m.gguf";
-
-    private static final String MIRROR_URL =
-        "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf";
-
-    private static final String[] URLS = {DEFAULT_MODEL_URL, MIRROR_URL};
-
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private volatile boolean cancelled = false;
 
-    public void download(File destFile, DownloadCallback callback) {
+    /** 使用指定 URL 列表下载，依次尝试，支持断点续传 */
+    public void download(File destFile, String[] urls, DownloadCallback callback) {
         cancelled = false;
         new Thread(() -> {
-            // 检查是否有未完成的下载可续传
             long existingSize = 0;
             if (destFile.exists()) {
                 existingSize = destFile.length();
@@ -47,16 +38,15 @@ public class ModelDownloadManager {
                 }
             }
 
-            for (int i = 0; i < URLS.length; i++) {
+            for (int i = 0; i < urls.length; i++) {
                 if (cancelled) return;
-                String url = URLS[i];
+                String url = urls[i];
                 Log.d(TAG, "尝试下载: " + url + (existingSize > 0 ? " (续传)" : ""));
 
                 try {
                     if (downloadFromUrl(url, destFile, existingSize, callback)) {
-                        return; // 成功
+                        return;
                     }
-                    // 失败则尝试下一个源
                     Log.w(TAG, "源 " + url + " 失败，尝试下一个");
                 } catch (Exception e) {
                     Log.e(TAG, "源 " + url + " 异常: " + e.getMessage());
@@ -88,7 +78,6 @@ public class ModelDownloadManager {
 
             if (responseCode != 200 && responseCode != 206) {
                 conn.disconnect();
-                // 如果续传被拒绝，从头开始
                 if (existingSize > 0 && responseCode == 200) {
                     existingSize = 0;
                     destFile.delete();
@@ -100,7 +89,6 @@ public class ModelDownloadManager {
             long totalSize;
             if (isResume) {
                 String range = conn.getHeaderField("Content-Range");
-                // "bytes X-Y/Z"
                 totalSize = Long.parseLong(range.substring(range.lastIndexOf('/') + 1));
                 Log.d(TAG, "续传: 已下载=" + existingSize + " 总大小=" + totalSize);
             } else {
@@ -124,7 +112,6 @@ public class ModelDownloadManager {
 
                 while ((read = in.read(buf)) != -1) {
                     if (cancelled) {
-                        // 保留已下载部分以便续传
                         mainHandler.post(() -> callback.onError("下载已取消"));
                         return false;
                     }
@@ -143,7 +130,6 @@ public class ModelDownloadManager {
                     }
                 }
 
-                // 完整性检查
                 if (totalSize > 0 && total < totalSize) {
                     Log.w(TAG, "下载不完整: " + total + "/" + totalSize);
                     return false;
@@ -160,27 +146,6 @@ public class ModelDownloadManager {
             Log.e(TAG, "下载异常: " + e.getMessage());
             return false;
         }
-    }
-
-    /** @deprecated 使用 download(File, DownloadCallback) 自动多源下载 */
-    @Deprecated
-    public void download(String url, File destFile, DownloadCallback callback) {
-        cancelled = false;
-        destFile.delete(); // 旧签名不支持续传
-        new Thread(() -> {
-            for (int i = 0; i < URLS.length; i++) {
-                String src = URLS[i];
-                try {
-                    if (downloadFromUrl(src, destFile, 0, callback)) return;
-                } catch (Exception e) {
-                    Log.e(TAG, "源异常: " + e.getMessage());
-                }
-            }
-            if (!cancelled) {
-                destFile.delete();
-                mainHandler.post(() -> callback.onError("所有下载源均失败"));
-            }
-        }).start();
     }
 
     public void cancel() {

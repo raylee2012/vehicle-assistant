@@ -218,6 +218,12 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        viewModel.checkModelChange();
+    }
+
+    @Override
     protected void onPause() {
         super.onPause();
         // 场景1: 录音中切后台 → 自动停止

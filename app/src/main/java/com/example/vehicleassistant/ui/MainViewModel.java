@@ -17,22 +17,35 @@ import com.example.vehicleassistant.model.ModelDownloadManager;
 import com.example.vehicleassistant.vehicle.FunctionRegistry;
 import com.example.vehicleassistant.vehicle.VehicleService;
 import com.example.vehicleassistant.vehicle.VehicleState;
-import com.example.vehicleassistant.ui.SettingsActivity;
 
 import java.io.File;
 
 public class MainViewModel extends AndroidViewModel {
 
+    // ---- 模型定义 ----
+    private static final String MODEL_05B_NAME = "qwen2.5-0.5b-instruct-q4_k_m.gguf";
+    private static final String[] MODEL_05B_URLS = {
+        "https://modelscope.cn/models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/master/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+        "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+    };
+    private static final long MODEL_05B_MIN_SIZE = 350_000_000L;
+    private static final String MODEL_05B_SIZE_TEXT = "约400MB";
+
+    private static final String MODEL_15B_NAME = "qwen2.5-1.5b-instruct-q4_k_m.gguf";
+    private static final String[] MODEL_15B_URLS = {
+        "https://modelscope.cn/models/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/master/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    };
+    private static final long MODEL_15B_MIN_SIZE = 900_000_000L;
+    private static final String MODEL_15B_SIZE_TEXT = "约1GB";
+
+    // ---- LiveData ----
     private final MutableLiveData<String> statusText = new MutableLiveData<>("正在初始化...");
     private final MutableLiveData<Boolean> inputEnabled = new MutableLiveData<>(false);
-
-    // 下载相关状态
     private final MutableLiveData<Boolean> downloadVisible = new MutableLiveData<>(false);
     private final MutableLiveData<Boolean> downloadActive = new MutableLiveData<>(false);
     private final MutableLiveData<Integer> downloadProgress = new MutableLiveData<>(0);
     private final MutableLiveData<String> downloadStatus = new MutableLiveData<>("");
-
-    // 语音交互
     private final MutableLiveData<Boolean> asrListening = new MutableLiveData<>(false);
     private final MutableLiveData<Boolean> voiceKitReady = new MutableLiveData<>(false);
     private final MutableLiveData<String> asrResult = new MutableLiveData<>(null);
@@ -41,7 +54,9 @@ public class MainViewModel extends AndroidViewModel {
     private AgentManager agentManager;
     private ChatAdapter adapter;
     private ModelDownloadManager downloadManager;
+    private File modelDir;
     private File modelFile;
+    private String currentModelKey;
 
     private com.cornex.voicekit.VoiceKitManager voiceKitManager;
     private com.cornex.voicekit.asr.IAsr asr;
@@ -51,16 +66,36 @@ public class MainViewModel extends AndroidViewModel {
         super(application);
         adapter = new ChatAdapter();
         downloadManager = new ModelDownloadManager();
+        modelDir = new File(application.getExternalFilesDir(null), "models");
+        initFromSettings(application);
+    }
 
-        File modelDir = new File(application.getExternalFilesDir(null), "models");
-        modelFile = new File(modelDir, "qwen2.5-0.5b-instruct-q4_k_m.gguf");
+    /** 根据 SharedPreferences 选择模型并初始化 */
+    private void initFromSettings(Application app) {
+        String modelKey = SettingsActivity.getModel(app);
+        currentModelKey = modelKey;
 
-        if (modelFile.exists()) {
+        String modelName;
+        long minSize;
+        String sizeText;
+        if ("0.5b".equals(modelKey)) {
+            modelName = MODEL_05B_NAME;
+            minSize = MODEL_05B_MIN_SIZE;
+            sizeText = MODEL_05B_SIZE_TEXT;
+        } else {
+            modelName = MODEL_15B_NAME;
+            minSize = MODEL_15B_MIN_SIZE;
+            sizeText = MODEL_15B_SIZE_TEXT;
+        }
+
+        modelFile = new File(modelDir, modelName);
+
+        if (modelFile.exists() && modelFile.length() > minSize) {
             downloadVisible.setValue(false);
-            initEngine(application);
+            initEngine(app);
         } else {
             downloadVisible.setValue(true);
-            downloadStatus.setValue("需下载模型文件（约760MB）");
+            downloadStatus.setValue("需下载模型文件（" + sizeText + "）");
             statusText.setValue("模型未下载");
         }
     }
@@ -86,16 +121,18 @@ public class MainViewModel extends AndroidViewModel {
                 VehicleService vehicleService = new VehicleService(registry, state);
 
                 if (!engine.isLoaded()) {
-                    modelFile.delete(); // 删除损坏文件，下次走下载路径
+                    modelFile.delete();
                     statusText.postValue("模型文件损坏，请重新下载");
                     mainHandler.post(() -> initVoiceKit(app));
                     downloadVisible.postValue(true);
                     return;
                 }
 
+                if (agentManager != null) {
+                    agentManager.shutdown();
+                }
                 agentManager = new AgentManager(engine, registry, vehicleService, state);
 
-                // 初始化语音交互
                 mainHandler.post(() -> initVoiceKit(app));
 
                 statusText.postValue("就绪");
@@ -107,18 +144,33 @@ public class MainViewModel extends AndroidViewModel {
         }).start();
     }
 
-    private static final long MIN_MODEL_SIZE = 700_000_000L; // Q3_K_M 约 760MB
+    /** 检查设置中的模型是否改变，改变则重新初始化 */
+    public void checkModelChange() {
+        Application app = getApplication();
+        String newKey = SettingsActivity.getModel(app);
+        if (!newKey.equals(currentModelKey)) {
+            // 模型切换 → 关闭旧引擎，重新选择模型文件
+            if (agentManager != null) {
+                agentManager.shutdown();
+                agentManager = null;
+            }
+            inputEnabled.postValue(false);
+            initFromSettings(app);
+        }
+    }
 
     public void startDownload() {
-        // 文件已存在且大小合理 → 直接初始化
-        if (modelFile.exists() && modelFile.length() > MIN_MODEL_SIZE) {
+        String modelKey = SettingsActivity.getModel(getApplication());
+        String[] urls = "0.5b".equals(modelKey) ? MODEL_05B_URLS : MODEL_15B_URLS;
+        long minSize = "0.5b".equals(modelKey) ? MODEL_05B_MIN_SIZE : MODEL_15B_MIN_SIZE;
+
+        if (modelFile.exists() && modelFile.length() > minSize) {
             downloadVisible.setValue(false);
             initEngine(getApplication());
             return;
         }
 
-        // 小文件残留 → 删除后重新下载
-        if (modelFile.exists() && modelFile.length() < MIN_MODEL_SIZE) {
+        if (modelFile.exists() && modelFile.length() < minSize) {
             modelFile.delete();
         }
 
@@ -126,7 +178,7 @@ public class MainViewModel extends AndroidViewModel {
         downloadStatus.setValue("正在下载... 0%");
         statusText.setValue("下载模型中...");
 
-        downloadManager.download(modelFile,
+        downloadManager.download(modelFile, urls,
             new ModelDownloadManager.DownloadCallback() {
                 @Override
                 public void onProgress(int percent, long downloadedBytes, long totalBytes) {
@@ -169,14 +221,12 @@ public class MainViewModel extends AndroidViewModel {
                 statusText.setValue("就绪");
 
                 if (response.videoSearchKeyword != null) {
-                    // 视频搜索：更新占位文字 + 插入视频卡片
                     adapter.finishThinking(placeholderPos, response.text, null);
                     adapter.addVideoSearchCard(response.videoSearchKeyword);
                 } else {
                     adapter.finishThinking(placeholderPos, response.text, response.execResults);
                 }
 
-                // TTS 自动播报助手回复
                 if (tts != null && response.text != null && !response.text.isEmpty()) {
                     tts.stopPlay();
                     tts.startPlay(response.text);
@@ -246,7 +296,6 @@ public class MainViewModel extends AndroidViewModel {
     }
 
     public void toggleListening() {
-        // 场景4: 模型推理中阻止（inputEnabled=false 表示模型正在处理中）
         if (!Boolean.TRUE.equals(inputEnabled.getValue())) {
             android.util.Log.d("MainViewModel", "toggleListening blocked: inputEnabled=false");
             android.widget.Toast.makeText(getApplication(), "模型正在处理中，请稍候",
@@ -273,7 +322,6 @@ public class MainViewModel extends AndroidViewModel {
         if (text != null && !text.trim().isEmpty()) {
             asrResult.postValue(text.trim());
         } else {
-            // 场景3: 识别结果为空
             android.widget.Toast.makeText(getApplication(), "未识别到语音，请重试",
                     android.widget.Toast.LENGTH_SHORT).show();
         }
@@ -283,14 +331,12 @@ public class MainViewModel extends AndroidViewModel {
         asrResult.postValue(null);
     }
 
-    /** Activity onDestroy 时调用 — 停止 TTS 播放 */
     public void stopTts() {
         if (tts != null) {
             tts.stopPlay();
         }
     }
 
-    /** Activity onPause 时调用 — 场景1: 录音中切后台自动停止 */
     public void stopListeningOnPause() {
         if (asr != null && Boolean.TRUE.equals(asrListening.getValue())) {
             asr.stopRecord();

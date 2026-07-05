@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-车载语音助手 — 基于本地大模型的智能车控对话助手，运行在 RedMi Note Pro 13 (Android) 上。通过 llama.cpp JNI 推理 Qwen2.5-0.5B Q4_K_M 量化模型，使用 Function Calling 机制解析用户意图并执行车控方法。
+车载语音助手 — 基于本地大模型的智能车控对话助手，运行在 RedMi Note Pro 13 (Android) 上。通过 llama.cpp JNI 推理 Qwen2.5-1.5B Q4_K_M 量化模型，使用 Function Calling 机制解析用户意图并执行车控方法。
 
 ## 构建与运行
 
@@ -93,15 +93,15 @@ Gradle 分发源使用腾讯云镜像，Maven 仓库使用阿里云镜像。JDK 
 | 模型输出 | ~200-400 |
 | 余量 | ~40% |
 
-推理参数: temperature=0.1, top_p=0.9, max_tokens=512, threads=4
+推理参数: temperature=0.1, top_p=0.9, max_tokens=512, threads=6
 
 ## 模型与 llama.cpp
 
 - llama.cpp 作为 git submodule (`llama.cpp/`) 管理，tag `b9871`
-- 模型不打包进 APK。首次启动检查 `ExternalFilesDir/models/qwen2.5-0.5b-instruct-q4_k_m.gguf`
-- 模型未找到时显示下载界面（HuggingFace 主地址 + ModelScope 备用镜像），约 760MB
-- 意图提取优先用 `MockCommandExtractor` 关键词匹配，模型仅在关键词未覆盖时兜底
-- 模型主要用于闲聊和车控结果的自然语言汇总（第二次推理）
+- 模型不打包进 APK。首次启动检查 `ExternalFilesDir/models/qwen2.5-1.5b-instruct-q4_k_m.gguf`
+- 模型未找到时显示下载界面（ModelScope 主地址 + HuggingFace 备用镜像），约 1GB
+- 意图提取双模式: 设置中可切换 Mock 优先（关键词匹配→模型兜底）或模型优先（Function Calling→Mock 兜底）
+- 1.5B 模型可以输出结构化 JSON Function Calling，0.5B 无法可靠输出 JSON
 
 ## 设计约束
 
