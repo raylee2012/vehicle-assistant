@@ -32,6 +32,7 @@ __attribute__((weak)) cl_program clCreateProgramWithSource(cl_context c, cl_uint
 __attribute__((weak)) cl_program clCreateProgramWithBinary(cl_context c, cl_uint n, const cl_device_id *d, const size_t *l, const unsigned char **b, cl_int *s, cl_int *e) { if(e)*e=CL_SUCCESS; return NULL; }
 __attribute__((weak)) cl_int clBuildProgram(cl_program p, cl_uint n, const cl_device_id *d, const char *o, void (*cb)(cl_program, void *), void *u) { return CL_SUCCESS; }
 __attribute__((weak)) cl_int clGetProgramBuildInfo(cl_program p, cl_device_id d, cl_program_build_info i, size_t s, void *v, size_t *r) { return CL_SUCCESS; }
+__attribute__((weak)) cl_int clGetProgramInfo(cl_program p, cl_program_info i, size_t s, void *v, size_t *r) { return CL_SUCCESS; }
 __attribute__((weak)) cl_int clReleaseProgram(cl_program p) { return CL_SUCCESS; }
 __attribute__((weak)) cl_kernel clCreateKernel(cl_program p, const char *n, cl_int *e) { if(e)*e=CL_SUCCESS; return NULL; }
 __attribute__((weak)) cl_int clSetKernelArg(cl_kernel k, cl_uint i, size_t s, const void *v) { return CL_SUCCESS; }

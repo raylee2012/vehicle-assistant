@@ -16,8 +16,12 @@
  */
 
 #include <jni.h>
+#include <cstdlib>
 #include <string>
 #include <vector>
+#include <thread>
+#include <chrono>
+#include <sys/stat.h>
 #include <android/log.h>
 #include "llama.h"
 
@@ -83,19 +87,54 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInit(
 
     auto* ctx = new LlamaContext();
 
+    // 设置 OpenCL 内核二进制缓存目录，避免每次启动都 JIT 编译
+    // 在 llama_backend_init() 之前必须设置好环境变量
+    std::string cacheDir(path);
+    auto pos = cacheDir.rfind('/');
+    if (pos != std::string::npos) {
+        cacheDir = cacheDir.substr(0, pos);  // 去掉文件名
+    }
+    pos = cacheDir.rfind('/');
+    if (pos != std::string::npos) {
+        cacheDir = cacheDir.substr(0, pos) + "/../cache/ocl_kernels";  // models/ → cache/ocl_kernels
+    }
+    // 创建缓存目录（mkdir -p 效果：逐级创建）
+    {
+        std::string mkdir_path;
+        for (size_t i = 0; i < cacheDir.size(); i++) {
+            mkdir_path += cacheDir[i];
+            if (cacheDir[i] == '/' && mkdir_path.size() > 1) {
+                mkdir(mkdir_path.c_str(), 0755);
+            }
+        }
+        mkdir(cacheDir.c_str(), 0755);
+    }
+    setenv("GGML_OPENCL_CACHE_DIR", cacheDir.c_str(), 1);
+    LOGD("OpenCL 缓存目录: %s", cacheDir.c_str());
+
+    // 将轻量算子强制放 CPU 执行，产生 GPU↔CPU 同步间隙让 UI 渲染
+    // Q4_0 全部 tensor 在 GPU 会连续执行无间隙，通过 opfilter 把轻量 op 推回 CPU
+    setenv("GGML_OPENCL_OPFILTER", "ADD|MUL|RMS_NORM|CPY|ROPE|SOFT_MAX", 1);
+    LOGD("OpenCL opfilter: ADD|MUL|RMS_NORM|CPY|ROPE|SOFT_MAX → CPU");
+
+    auto t_start = std::chrono::steady_clock::now();
+
     // 步骤 1：初始化 llama.cpp 全局后端（只需调用一次）
     llama_backend_init();
 
     // 步骤 2：从文件加载模型权重到内存
-    //         Q4_K_M 量化模型约占用 ~1.5GB RAM（含 MMAP）
+    //         mmap 映射文件（约 1GB），GPU 后端分配 OpenCL buffer
     llama_model_params model_params = llama_model_default_params();
     ctx->model = llama_model_load_from_file(path, model_params);
     if (!ctx->model) {
         LOGE("模型加载失败: %s（文件路径是否正确？文件是否完整？）", path);
         delete ctx;
         env->ReleaseStringUTFChars(modelPath, path);
-        return 0; // 返回 0 表示加载失败
+        return 0;
     }
+    auto t_model = std::chrono::steady_clock::now();
+    auto ms_model = std::chrono::duration_cast<std::chrono::milliseconds>(t_model - t_start).count();
+    LOGD("模型文件加载: %lld ms", ms_model);
 
     // 步骤 3：创建推理上下文（分配 KV cache 等工作内存）
     //         n_ctx=4096 时 KV cache 约占用 ~256MB
@@ -111,6 +150,10 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInit(
         env->ReleaseStringUTFChars(modelPath, path);
         return 0;
     }
+
+    auto t_ctx = std::chrono::steady_clock::now();
+    auto ms_ctx = std::chrono::duration_cast<std::chrono::milliseconds>(t_ctx - t_model).count();
+    LOGD("推理上下文创建: %lld ms", ms_ctx);
 
     // 步骤 4：获取词表指针
     ctx->vocab = llama_model_get_vocab(ctx->model);
@@ -207,6 +250,11 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInfer(
         // 增量推理：把刚生成的 token 喂回去，更新 KV cache
         if (llama_decode(ctx->ctx, llama_batch_get_one(&token, 1)) != 0) {
             break;
+        }
+
+        // 每 4 个 token 让出 GPU 5ms 给 UI 渲染，防止 OpenCL 持续占用 GPU 导致卡顿
+        if ((i & 3) == 3) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     }
     llama_sampler_free(smpl);
