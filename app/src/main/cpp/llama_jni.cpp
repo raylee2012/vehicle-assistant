@@ -72,6 +72,15 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInit(
     const char* path = env->GetStringUTFChars(modelPath, nullptr);
     LOGD("正在加载模型: %s (ctx=%d, threads=%d)", path, contextSize, threads);
 
+    // 设置 llama.cpp 日志回调，捕获详细错误信息
+    llama_log_set([](enum ggml_log_level level, const char* text, void*) {
+        if (level == GGML_LOG_LEVEL_ERROR) {
+            LOGE("llama: %s", text);
+        } else {
+            LOGD("llama: %s", text);
+        }
+    }, nullptr);
+
     auto* ctx = new LlamaContext();
 
     // 步骤 1：初始化 llama.cpp 全局后端（只需调用一次）

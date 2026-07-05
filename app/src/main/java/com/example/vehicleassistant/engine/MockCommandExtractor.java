@@ -6,7 +6,7 @@ import org.json.JSONObject;
 /**
  * 基于关键词匹配的模拟意图提取器。
  * 当真实模型未就绪时，从用户输入中提取车控指令。
- * 覆盖全部 23 个车控方法的关键词。
+ * 覆盖 10 个核心车控方法的关键词。
  */
 public class MockCommandExtractor {
 
@@ -75,18 +75,6 @@ public class MockCommandExtractor {
             } catch (Exception ignored) {}
         }
 
-        // --- 后备箱 ---
-        if (containsAny(userInput, "后备箱", "尾箱", "行李箱")) {
-            JSONObject trunk = new JSONObject();
-            try {
-                trunk.put("action", "control_trunk");
-                JSONObject params = new JSONObject();
-                params.put("action", containsAny(userInput, "开") ? "open" : "close");
-                trunk.put("params", params);
-                commands.put(trunk);
-            } catch (Exception ignored) {}
-        }
-
         // --- 天窗 ---
         if (containsAny(userInput, "天窗")) {
             JSONObject sun = new JSONObject();
@@ -96,56 +84,6 @@ public class MockCommandExtractor {
                 params.put("action", containsAny(userInput, "关") ? "close" : "open");
                 sun.put("params", params);
                 commands.put(sun);
-            } catch (Exception ignored) {}
-        }
-
-        // --- 儿童锁 ---
-        if (containsAny(userInput, "儿童锁")) {
-            JSONObject cl = new JSONObject();
-            try {
-                cl.put("action", "child_lock");
-                JSONObject params = new JSONObject();
-                params.put("power", !containsAny(userInput, "关"));
-                cl.put("params", params);
-                commands.put(cl);
-            } catch (Exception ignored) {}
-        }
-
-        // --- 座椅加热 ---
-        if (containsAny(userInput, "座椅加热", "加热座椅", "座加热")) {
-            JSONObject sh = new JSONObject();
-            try {
-                sh.put("action", "seat_heat");
-                JSONObject params = new JSONObject();
-                params.put("seat", extractSeat(userInput));
-                params.put("level", containsAny(userInput, "关") ? 0 : extractLevel(userInput, 3));
-                sh.put("params", params);
-                commands.put(sh);
-            } catch (Exception ignored) {}
-        }
-
-        // --- 座椅通风 ---
-        if (containsAny(userInput, "座椅通风", "通风座椅", "座通风")) {
-            JSONObject sv = new JSONObject();
-            try {
-                sv.put("action", "seat_vent");
-                JSONObject params = new JSONObject();
-                params.put("seat", extractSeat(userInput));
-                params.put("level", containsAny(userInput, "关") ? 0 : extractLevel(userInput, 3));
-                sv.put("params", params);
-                commands.put(sv);
-            } catch (Exception ignored) {}
-        }
-
-        // --- 方向盘加热 ---
-        if (containsAny(userInput, "方向盘加热", "方向盘")) {
-            JSONObject sth = new JSONObject();
-            try {
-                sth.put("action", "steering_heat");
-                JSONObject params = new JSONObject();
-                params.put("power", !containsAny(userInput, "关"));
-                sth.put("params", params);
-                commands.put(sth);
             } catch (Exception ignored) {}
         }
 
@@ -161,30 +99,6 @@ public class MockCommandExtractor {
                 else params.put("mode", "auto");
                 hl.put("params", params);
                 commands.put(hl);
-            } catch (Exception ignored) {}
-        }
-
-        // --- 雾灯 ---
-        if (containsAny(userInput, "雾灯")) {
-            JSONObject fl = new JSONObject();
-            try {
-                fl.put("action", "control_fog_light");
-                JSONObject params = new JSONObject();
-                params.put("power", !containsAny(userInput, "关"));
-                fl.put("params", params);
-                commands.put(fl);
-            } catch (Exception ignored) {}
-        }
-
-        // --- 双闪 ---
-        if (containsAny(userInput, "双闪", "双跳", "危险灯", "警示灯")) {
-            JSONObject hz = new JSONObject();
-            try {
-                hz.put("action", "hazard_light");
-                JSONObject params = new JSONObject();
-                params.put("power", !containsAny(userInput, "关"));
-                hz.put("params", params);
-                commands.put(hz);
             } catch (Exception ignored) {}
         }
 
@@ -204,19 +118,6 @@ public class MockCommandExtractor {
             } catch (Exception ignored) {}
         }
 
-        // --- 定速巡航 ---
-        if (containsAny(userInput, "巡航")) {
-            JSONObject cc = new JSONObject();
-            try {
-                cc.put("action", "cruise_control");
-                JSONObject params = new JSONObject();
-                params.put("power", !containsAny(userInput, "关", "取消"));
-                params.put("speed", extractSpeed(userInput));
-                cc.put("params", params);
-                commands.put(cc);
-            } catch (Exception ignored) {}
-        }
-
         // --- 雨刮 ---
         if (containsAny(userInput, "雨刮", "雨刷", "刮水")) {
             JSONObject wp = new JSONObject();
@@ -230,19 +131,6 @@ public class MockCommandExtractor {
                 else params.put("speed", "auto");
                 wp.put("params", params);
                 commands.put(wp);
-            } catch (Exception ignored) {}
-        }
-
-        // --- 氛围灯 ---
-        if (containsAny(userInput, "氛围灯", "内饰灯")) {
-            JSONObject al = new JSONObject();
-            try {
-                al.put("action", "ambient_light");
-                JSONObject params = new JSONObject();
-                params.put("color", extractColor(userInput));
-                params.put("brightness", extractPercent(userInput) >= 0 ? extractPercent(userInput) : 50);
-                al.put("params", params);
-                commands.put(al);
             } catch (Exception ignored) {}
         }
 
@@ -275,21 +163,7 @@ public class MockCommandExtractor {
             }
         }
 
-        // --- 空气循环 ---
-        if (containsAny(userInput, "循环", "换气")) {
-            JSONObject circ = new JSONObject();
-            try {
-                circ.put("action", "set_air_circulation");
-                JSONObject params = new JSONObject();
-                if (containsAny(userInput, "内循环", "内")) params.put("mode", "internal");
-                else if (containsAny(userInput, "外循环", "外", "外部")) params.put("mode", "external");
-                else params.put("mode", "auto");
-                circ.put("params", params);
-                commands.put(circ);
-            } catch (Exception ignored) {}
-        }
-
-        // 如果没匹配到任何指令，返回一个通用查询
+        // 如果没匹配到任何指令，返回 null 走闲聊兜底
         if (commands.length() == 0) {
             return null; // 让 OutputParser 走闲聊兜底
         }

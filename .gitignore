@@ -35,5 +35,8 @@ app/src/main/java/com/example/vehicleassistant/databinding/
 # Docs (spec 和 plan 在 git 中跟踪，其余忽略)
 docs/superpowers/sdd/
 
+# Model files (large binaries ~800MB)
+*.gguf
+
 # Superpowers scratch
 .superpowers/

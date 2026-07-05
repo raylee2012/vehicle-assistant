@@ -25,7 +25,7 @@ public class LlamaEngine {
         if (loaded) return;
         nativePtr = nativeInit(config.modelPath, config.contextSize,
             config.maxTokens, config.temperature, config.topP, config.threads);
-        loaded = true;
+        loaded = (nativePtr != 0);
     }
 
     public synchronized String infer(String prompt) {

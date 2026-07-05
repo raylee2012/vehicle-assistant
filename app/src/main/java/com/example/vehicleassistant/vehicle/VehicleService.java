@@ -68,9 +68,8 @@ public class VehicleService {
     private String validateParams(ToolDefinition def, Map<String, Object> params) {
         for (ParamDef p : def.params) {
             Object value = params.get(p.name);
-            if (value == null) {
-                return "缺少参数: " + p.name;
-            }
+            // 未传入的参数跳过校验（可选参数，执行时用默认值）
+            if (value == null) continue;
 
             if ("int".equals(p.type) && value instanceof Number) {
                 int intVal = ((Number) value).intValue();

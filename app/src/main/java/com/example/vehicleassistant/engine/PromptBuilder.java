@@ -11,12 +11,11 @@ public class PromptBuilder {
 
     private static final String SYSTEM_TEMPLATE =
         "你是车控助手。规则:\n" +
-        "- 车控指令→输出JSON数组:[{\"action\":\"方法名\",\"params\":{}}]\n" +
-        "- 一条指令也要用[]包裹\n" +
-        "- 闲聊/模糊/否定→直接回文本,不输出JSON\n" +
-        "- 模糊意图需追问确认\n\n" +
-        "车辆状态: {vehicle_state}\n\n" +
-        "方法:\n" +
+        "- 车控指令→输出JSON:[{\"action\":\"name\",\"params\":{}}]\n" +
+        "- 一条也需[]包裹\n" +
+        "- 闲聊/模糊→回文本\n\n" +
+        "状态: {vehicle_state}\n\n" +
+        "方法(格式:name|param1(enum/int)|param2):\n" +
         "{tools_schema}";
 
     private static final String RESULT_PROMPT =

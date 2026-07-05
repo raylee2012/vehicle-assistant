@@ -43,14 +43,14 @@ public class MainViewModel extends AndroidViewModel {
         downloadManager = new ModelDownloadManager();
 
         File modelDir = new File(application.getExternalFilesDir(null), "models");
-        modelFile = new File(modelDir, "qwen2.5-1.5b-instruct-q4_k_m.gguf");
+        modelFile = new File(modelDir, "qwen2.5-1.5b-instruct-q3_k_m.gguf");
 
         if (modelFile.exists()) {
             downloadVisible.setValue(false);
             initEngine(application);
         } else {
             downloadVisible.setValue(true);
-            downloadStatus.setValue("需下载模型文件（约1.5GB）");
+            downloadStatus.setValue("需下载模型文件（约760MB）");
             statusText.setValue("模型未下载");
         }
     }
@@ -74,6 +74,13 @@ public class MainViewModel extends AndroidViewModel {
                 FunctionRegistry registry = new FunctionRegistry();
                 VehicleService vehicleService = new VehicleService(registry, state);
 
+                if (!engine.isLoaded()) {
+                    modelFile.delete(); // 删除损坏文件，下次走下载路径
+                    statusText.postValue("模型文件损坏，请重新下载");
+                    downloadVisible.postValue(true);
+                    return;
+                }
+
                 agentManager = new AgentManager(engine, registry, vehicleService, state);
 
                 statusText.postValue("就绪");
@@ -85,18 +92,26 @@ public class MainViewModel extends AndroidViewModel {
         }).start();
     }
 
+    private static final long MIN_MODEL_SIZE = 700_000_000L; // Q3_K_M 约 760MB
+
     public void startDownload() {
-        if (modelFile.exists()) {
+        // 文件已存在且大小合理 → 直接初始化
+        if (modelFile.exists() && modelFile.length() > MIN_MODEL_SIZE) {
             downloadVisible.setValue(false);
             initEngine(getApplication());
             return;
+        }
+
+        // 小文件残留 → 删除后重新下载
+        if (modelFile.exists() && modelFile.length() < MIN_MODEL_SIZE) {
+            modelFile.delete();
         }
 
         downloadActive.setValue(true);
         downloadStatus.setValue("正在下载... 0%");
         statusText.setValue("下载模型中...");
 
-        downloadManager.download(ModelDownloadManager.DEFAULT_MODEL_URL, modelFile,
+        downloadManager.download(modelFile,
             new ModelDownloadManager.DownloadCallback() {
                 @Override
                 public void onProgress(int percent, long downloadedBytes, long totalBytes) {
