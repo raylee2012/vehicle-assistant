@@ -162,6 +162,19 @@ public class MockCommandExtractor {
             } catch (Exception ignored) {}
         }
 
+        // --- 视频搜索 ---
+        String videoKeyword = VideoSearchHelper.extractKeyword(userInput);
+        if (videoKeyword != null) {
+            JSONObject vs = new JSONObject();
+            try {
+                vs.put("action", "video_search");
+                JSONObject params = new JSONObject();
+                params.put("keyword", videoKeyword);
+                vs.put("params", params);
+                commands.put(vs);
+            } catch (Exception ignored) {}
+        }
+
         // --- 后视镜 ---
         if (containsAny(userInput, "后视镜", "倒车镜")) {
             String mirClause = getClause(userInput, "后视镜", "倒车镜");

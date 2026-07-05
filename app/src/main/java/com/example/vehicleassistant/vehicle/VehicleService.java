@@ -348,6 +348,10 @@ public class VehicleService {
                 if ("rear".equals(pos)) return "后挡风除霜已开启";
                 return "除霜已开启";
             }
+            case "video_search": {
+                String kw = (String) params.get("keyword");
+                return "已为您找到「" + (kw != null ? kw : "") + "」相关视频";
+            }
             default:
                 return def.description + " 已执行";
         }

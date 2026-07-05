@@ -26,6 +26,7 @@ public class PromptBuilder {
         "用户: 打开空调26度 → [{\"action\":\"set_ac\",\"params\":{\"power\":true,\"temp\":26,\"mode\":\"auto\"}}]\n" +
         "用户: 关闭车窗 → [{\"action\":\"control_window\",\"params\":{\"position\":\"all\",\"action\":\"close\"}}]\n" +
         "用户: 打开空调并关闭车窗 → [{\"action\":\"set_ac\",\"params\":{\"power\":true,\"temp\":22,\"mode\":\"auto\"}},{\"action\":\"control_window\",\"params\":{\"position\":\"all\",\"action\":\"close\"}}]\n" +
+        "用户: 搜索汽车视频 → [{\"action\":\"video_search\",\"params\":{\"keyword\":\"汽车\"}}]\n" +
         "用户: 你好 → 你好！有什么可以帮你的？";
 
     private static final String RESULT_PROMPT =

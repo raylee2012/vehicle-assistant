@@ -86,6 +86,11 @@ public class FunctionRegistry {
                         Arrays.asList("off", "low", "medium", "high", "auto"))
                 ), false, false, "wiper"));
 
+        register(new ToolDefinition("video_search", "视频搜索",
+                Arrays.asList(
+                    new ParamDef("keyword", "string", null, null, null, null)
+                ), false, false, "video"));
+
         buildSchema();
     }
 

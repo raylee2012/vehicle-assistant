@@ -90,15 +90,6 @@ public class AgentManager {
                 return;
             }
 
-            // 视频搜索关键词拦截 — 在模型推理前处理
-            String videoKeyword = VideoSearchHelper.extractKeyword(userInput);
-            if (videoKeyword != null) {
-                Log.d(TAG, "Video search: " + videoKeyword);
-                callback.onResponse(AgentResponse.videoSearch(
-                    "已为您找到以下视频结果", videoKeyword));
-                return;
-            }
-
             // 确保 system prompt 已缓存
             if (cachedSystemPrompt == null) {
                 String stateSummary = buildVehicleStateSummary();
@@ -156,7 +147,8 @@ public class AgentManager {
                     new ChatMessage(ChatMessage.ROLE_USER, userInput),
                     new ChatMessage(ChatMessage.ROLE_ASSISTANT, secondOutput));
 
-                callback.onResponse(new AgentResponse(secondOutput, execResults, false));
+                String videoKw = extractVideoKeyword(execResults);
+                callback.onResponse(new AgentResponse(secondOutput, execResults, false, videoKw));
             } else {
                 // 闲聊模式: 直接返回文本
                 contextManager.saveUserAndAssistant(
@@ -194,6 +186,17 @@ public class AgentManager {
                " 锁=" + (vehicleState.doorLocked ? "锁" : "开") +
                " 驾=" + vehicleState.driveMode +
                " P=" + (vehicleState.isParked ? "1" : "0");
+    }
+
+    private String extractVideoKeyword(List<ExecutionResult> results) {
+        if (results == null) return null;
+        for (ExecutionResult r : results) {
+            if ("video_search".equals(r.action) && r.params != null) {
+                Object kw = r.params.get("keyword");
+                return kw != null ? kw.toString() : null;
+            }
+        }
+        return null;
     }
 
     public List<ChatMessage> getHistory() {
