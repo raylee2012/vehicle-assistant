@@ -6,6 +6,8 @@ android {
     namespace 'com.example.vehicleassistant'
     compileSdk 34
 
+    ndkVersion "25.1.8937393"
+
     defaultConfig {
         applicationId "com.example.vehicleassistant"
         minSdk 26
