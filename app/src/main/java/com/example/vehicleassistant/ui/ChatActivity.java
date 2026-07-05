@@ -42,6 +42,9 @@ public class ChatActivity extends AppCompatActivity {
     private ImageView btnMic;
     private TextView btnSettings;
     private ValueAnimator voicePulseAnimator;
+    private ValueAnimator dotAnimator;
+    private int dotFrame = 0;
+    private static final String[] DOT_FRAMES = {"思考中", "思考中·", "思考中··", "思考中···"};
 
     // Critical 1: RECORD_AUDIO runtime permission launcher
     private final ActivityResultLauncher<String> requestRecordAudioLauncher =
@@ -82,8 +85,15 @@ public class ChatActivity extends AppCompatActivity {
         rvChat.setLayoutManager(new LinearLayoutManager(this));
         rvChat.setAdapter(adapter);
 
-        // 状态文本
-        viewModel.getStatusText().observe(this, status -> tvStatus.setText(status));
+        // 状态文本 — "思考中..." 时启动省略号动画
+        viewModel.getStatusText().observe(this, status -> {
+            if ("思考中...".equals(status)) {
+                startDotAnimation();
+            } else {
+                stopDotAnimation();
+                tvStatus.setText(status);
+            }
+        });
 
         // 输入启用状态 → 按钮样式
         viewModel.getInputEnabled().observe(this, enabled -> applyButtonStates());
@@ -210,6 +220,23 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
+    private void startDotAnimation() {
+        if (dotAnimator != null && dotAnimator.isRunning()) return;
+        dotFrame = 0;
+        dotAnimator = ValueAnimator.ofInt(0, DOT_FRAMES.length - 1);
+        dotAnimator.setDuration(DOT_FRAMES.length * 500L);
+        dotAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        dotAnimator.addUpdateListener(anim -> tvStatus.setText(DOT_FRAMES[(int) anim.getAnimatedValue()]));
+        dotAnimator.start();
+    }
+
+    private void stopDotAnimation() {
+        if (dotAnimator != null) {
+            dotAnimator.cancel();
+            dotAnimator = null;
+        }
+    }
+
     private void sendMessage() {
         String text = etInput.getText().toString().trim();
         if (text.isEmpty()) return;
@@ -237,6 +264,7 @@ public class ChatActivity extends AppCompatActivity {
         if (voicePulseAnimator != null) {
             voicePulseAnimator.cancel();
         }
+        stopDotAnimation();
         viewModel.stopTts();
         binding = null;
     }

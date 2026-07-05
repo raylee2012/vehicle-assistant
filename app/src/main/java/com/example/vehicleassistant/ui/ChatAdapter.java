@@ -1,5 +1,9 @@
 package com.example.vehicleassistant.ui;
 
+import android.os.Handler;
+import android.os.Looper;
+import android.text.SpannableString;
+import android.text.style.ForegroundColorSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -38,14 +42,14 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         }
 
         String getThinkingTitle() {
-            if (!isThinkingFinished) return "正在思考…";
+            if (!isThinkingFinished) return "正在思考...";
             long seconds = Math.max(1, Math.round(thinkingDurationMs / 1000.0));
             return "已思考 " + seconds + " 秒";
         }
 
         String getThinkingDisplayText() {
             if (thinkingContent != null && !thinkingContent.isEmpty()) return thinkingContent;
-            return isThinkingFinished ? "本次没有返回详细思考摘要。" : "正在思考…";
+            return isThinkingFinished ? "本次没有返回详细思考摘要。" : "正在思考...";
         }
     }
 
@@ -90,6 +94,12 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
     }
 
     @Override
+    public void onViewRecycled(@NonNull ViewHolder holder) {
+        super.onViewRecycled(holder);
+        holder.stopDotAnimation();
+    }
+
+    @Override
     public int getItemCount() {
         return items.size();
     }
@@ -113,10 +123,9 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         notifyItemInserted(items.size() - 1);
     }
 
-    /** 添加思考占位条目，返回其位置索引。 */
     public int addThinkingPlaceholder() {
         ChatItem item = new ChatItem(
-            new ChatMessage(ChatMessage.ROLE_ASSISTANT, "思考中…"), new ArrayList<>());
+            new ChatMessage(ChatMessage.ROLE_ASSISTANT, "思考中..."), new ArrayList<>());
         item.isThinking = true;
         item.isThinkingExpanded = true;
         item.isThinkingFinished = false;
@@ -127,7 +136,6 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         return pos;
     }
 
-    /** 思考完成，更新占位条目为最终回复。 */
     public void finishThinking(int placeholderPos, String text, List<ExecutionResult> execResults) {
         if (placeholderPos < 0 || placeholderPos >= items.size()) return;
         ChatItem item = items.get(placeholderPos);
@@ -156,18 +164,21 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         TextView tvMessage;
         TextView tvVideoTitle;
         Button btnOpenVideo;
-View reasoningHeader;
+        View reasoningHeader;
         TextView reasoningToggle;
         TextView reasoningTitle;
         TextView reasoningContent;
         View reasoningDivider;
+        private final Handler dotHandler = new Handler(Looper.getMainLooper());
+        private Runnable dotRunnable;
+        private int dotFrame;
 
         ViewHolder(View itemView) {
             super(itemView);
             tvMessage = itemView.findViewById(R.id.tv_message);
             tvVideoTitle = itemView.findViewById(R.id.tv_video_title);
             btnOpenVideo = itemView.findViewById(R.id.btn_open_video);
-reasoningHeader = itemView.findViewById(R.id.reasoning_header);
+            reasoningHeader = itemView.findViewById(R.id.reasoning_header);
             reasoningToggle = itemView.findViewById(R.id.reasoning_toggle);
             reasoningTitle = itemView.findViewById(R.id.reasoning_title);
             reasoningContent = itemView.findViewById(R.id.reasoning_content);
@@ -181,14 +192,21 @@ reasoningHeader = itemView.findViewById(R.id.reasoning_header);
                 if (reasoningContent != null) reasoningContent.setVisibility(View.GONE);
                 if (reasoningDivider != null) reasoningDivider.setVisibility(View.GONE);
                 if (reasoningHeader != null) reasoningHeader.setOnClickListener(null);
+                stopDotAnimation();
                 return;
             }
 
             if (reasoningHeader != null) reasoningHeader.setVisibility(View.VISIBLE);
             if (reasoningToggle != null)
                 reasoningToggle.setText(item.isThinkingExpanded ? "▼" : "▶");
-            if (reasoningTitle != null)
-                reasoningTitle.setText(item.getThinkingTitle());
+            if (reasoningTitle != null) {
+                if (item.isThinking && !item.isThinkingFinished) {
+                    startDotAnimation();
+                } else {
+                    stopDotAnimation();
+                    reasoningTitle.setText(item.getThinkingTitle());
+                }
+            }
             if (reasoningContent != null) {
                 reasoningContent.setText(item.getThinkingDisplayText());
                 reasoningContent.setVisibility(item.isThinkingExpanded ? View.VISIBLE : View.GONE);
@@ -213,6 +231,39 @@ reasoningHeader = itemView.findViewById(R.id.reasoning_header);
             if (btnOpenVideo != null) {
                 btnOpenVideo.setOnClickListener(v ->
                     VideoSearchHelper.openSearch(v.getContext(), keyword));
+            }
+        }
+
+        void startDotAnimation() {
+            if (dotRunnable != null) return;
+            dotFrame = 0;
+            dotRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    if (reasoningTitle == null) return;
+                    String base = "正在思考...";
+                    SpannableString sp = new SpannableString(base);
+                    int visibleDots = dotFrame % 4;
+                    int textColor = reasoningTitle.getCurrentTextColor();
+                    int transparent = textColor & 0x00FFFFFF; // same color, alpha=0
+                    for (int i = 0; i < 3; i++) {
+                        if (i >= visibleDots) {
+                            sp.setSpan(new ForegroundColorSpan(transparent),
+                                    4 + i, 5 + i, 0);
+                        }
+                    }
+                    reasoningTitle.setText(sp);
+                    dotFrame++;
+                    dotHandler.postDelayed(this, 400);
+                }
+            };
+            dotHandler.post(dotRunnable);
+        }
+
+        void stopDotAnimation() {
+            if (dotRunnable != null) {
+                dotHandler.removeCallbacks(dotRunnable);
+                dotRunnable = null;
             }
         }
     }
