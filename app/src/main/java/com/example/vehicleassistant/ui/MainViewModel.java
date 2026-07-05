@@ -45,7 +45,6 @@ public class MainViewModel extends AndroidViewModel {
     private com.cornex.voicekit.VoiceKitManager voiceKitManager;
     private com.cornex.voicekit.asr.IAsr asr;
     private com.cornex.voicekit.tts.ITts tts;
-    private String pendingTtsText;
 
     public MainViewModel(@NonNull Application application) {
         super(application);
@@ -72,7 +71,7 @@ public class MainViewModel extends AndroidViewModel {
 
                 if (!modelFile.exists()) {
                     statusText.postValue("模型文件未找到");
-                    initVoiceKit(app);
+                    mainHandler.post(() -> initVoiceKit(app));
                     downloadVisible.postValue(true);
                     return;
                 }
@@ -88,7 +87,7 @@ public class MainViewModel extends AndroidViewModel {
                 if (!engine.isLoaded()) {
                     modelFile.delete(); // 删除损坏文件，下次走下载路径
                     statusText.postValue("模型文件损坏，请重新下载");
-                    initVoiceKit(app);
+                    mainHandler.post(() -> initVoiceKit(app));
                     downloadVisible.postValue(true);
                     return;
                 }
@@ -96,7 +95,7 @@ public class MainViewModel extends AndroidViewModel {
                 agentManager = new AgentManager(engine, registry, vehicleService, state);
 
                 // 初始化语音交互
-                initVoiceKit(app);
+                mainHandler.post(() -> initVoiceKit(app));
 
                 statusText.postValue("就绪");
                 inputEnabled.postValue(true);
@@ -229,8 +228,8 @@ public class MainViewModel extends AndroidViewModel {
     }
 
     public void toggleListening() {
-        // 场景4: 模型推理中阻止
-        if (agentManager != null && !agentManager.isReady()) {
+        // 场景4: 模型推理中阻止（inputEnabled=false 表示模型正在处理中）
+        if (!Boolean.TRUE.equals(inputEnabled.getValue())) {
             android.widget.Toast.makeText(getApplication(), "模型正在处理中，请稍候",
                     android.widget.Toast.LENGTH_SHORT).show();
             return;
@@ -259,6 +258,13 @@ public class MainViewModel extends AndroidViewModel {
 
     public void onAsrResultConsumed() {
         asrResult.postValue(null);
+    }
+
+    /** Activity onDestroy 时调用 — 停止 TTS 播放 */
+    public void stopTts() {
+        if (tts != null) {
+            tts.stopPlay();
+        }
     }
 
     /** Activity onPause 时调用 — 场景1: 录音中切后台自动停止 */

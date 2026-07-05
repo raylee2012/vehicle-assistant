@@ -1,5 +1,7 @@
 package com.example.vehicleassistant.ui;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -8,8 +10,12 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -34,6 +40,16 @@ public class ChatActivity extends AppCompatActivity {
     private TextView tvDownloadStatus;
     private Button btnMic;
     private LottieAnimationView lottieWaveform;
+
+    // Critical 1: RECORD_AUDIO runtime permission launcher
+    private final ActivityResultLauncher<String> requestRecordAudioLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted) {
+                    viewModel.toggleListening();
+                } else {
+                    Toast.makeText(this, "需要录音权限，请在设置中授权", Toast.LENGTH_SHORT).show();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,11 +84,15 @@ public class ChatActivity extends AppCompatActivity {
         // 状态文本
         viewModel.getStatusText().observe(this, status -> tvStatus.setText(status));
 
-        // 输入启用状态（整合 VoiceKit 就绪状态控制麦克风可见性）
+        // Critical 3: 输入启用状态 — 配合 updateMicVisibility 控制麦克风可见性
         viewModel.getInputEnabled().observe(this, enabled -> {
-            Boolean vkReady = viewModel.getVoiceKitReady().getValue();
-            btnMic.setVisibility(enabled != null && enabled && vkReady != null && vkReady ? View.VISIBLE : View.GONE);
+            updateMicVisibility();
             updateInputState();
+        });
+
+        // Critical 3: 专用 voiceKitReady 观察者 — 解决 init 异步竞态导致麦克风永不显示
+        viewModel.getVoiceKitReady().observe(this, ready -> {
+            updateMicVisibility();
         });
 
         // 下载区域可见性
@@ -99,8 +119,15 @@ public class ChatActivity extends AppCompatActivity {
         // 发送按钮
         btnSend.setOnClickListener(v -> sendMessage());
 
-        // 麦克风按钮 — 录音中再点 = 手动结束
-        btnMic.setOnClickListener(v -> viewModel.toggleListening());
+        // Critical 1: 麦克风按钮 — 检查 RECORD_AUDIO 权限后再触发放/停录音
+        btnMic.setOnClickListener(v -> {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                    == PackageManager.PERMISSION_GRANTED) {
+                viewModel.toggleListening();
+            } else {
+                requestRecordAudioLauncher.launch(Manifest.permission.RECORD_AUDIO);
+            }
+        });
 
         // ASR 录音状态 → 驱动 麦克风/Lottie 互斥显示 + 输入禁用
         viewModel.getAsrListening().observe(this, listening -> {
@@ -111,7 +138,7 @@ public class ChatActivity extends AppCompatActivity {
             } else {
                 lottieWaveform.cancelAnimation();
                 lottieWaveform.setVisibility(View.GONE);
-                btnMic.setVisibility(View.VISIBLE);
+                updateMicVisibility();
             }
             updateInputState();
         });
@@ -143,6 +170,18 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * Critical 3: 综合判断 inputEnabled + voiceKitReady + !asrListening 后决定麦克风可见性。
+     * 三个 LiveData 观察者 (inputEnabled / voiceKitReady / asrListening) 均调用此方法，
+     * 解决 VoiceKit 异步初始化竞态导致麦克风永不出现的问题。
+     */
+    private void updateMicVisibility() {
+        boolean showMic = Boolean.TRUE.equals(viewModel.getInputEnabled().getValue())
+                && Boolean.TRUE.equals(viewModel.getVoiceKitReady().getValue())
+                && !Boolean.TRUE.equals(viewModel.getAsrListening().getValue());
+        btnMic.setVisibility(showMic ? View.VISIBLE : View.GONE);
+    }
+
     // 辅助方法：输入框和发送按钮只有在"模型就绪 + 不在录音中"才可用
     private void updateInputState() {
         Boolean inputOk = viewModel.getInputEnabled().getValue();
@@ -169,6 +208,8 @@ public class ChatActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        // Important 5: 停止 TTS 播放
+        viewModel.stopTts();
         binding = null;
     }
 }
