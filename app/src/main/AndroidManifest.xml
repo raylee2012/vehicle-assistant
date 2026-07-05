@@ -10,7 +10,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="车控助手"
+        android:label="端侧模型车机助手"
         android:theme="@style/Theme.VehicleAssistant"
         android:supportsRtl="true">
 
