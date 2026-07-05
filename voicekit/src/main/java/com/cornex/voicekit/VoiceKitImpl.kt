@@ -31,11 +31,12 @@ class VoiceKitImpl : IVoiceKit {
 
     override fun init(appContext: Context, listener: IInitResult) {
         this.mContext = appContext
+        val logPath = appContext.filesDir.absolutePath + "/iflytek/SparkChain.log"
         mSparkChainConfig.appID(VoiceKitDef.APP_ID)
             .apiKey(VoiceKitDef.APP_KEY)
             .apiSecret(VoiceKitDef.APP_SECRET)
-            .logLevel(LogLvl.VERBOSE.value)
-            .logPath(VoiceKitDef.SPARK_LOG_PATH)
+            .logLevel(LogLvl.WARN.value)
+            .logPath(logPath)
         val ret = SparkChain.getInst().init(appContext, mSparkChainConfig)
         if (ret == 0) {
             mAsr.initAsr(appContext)

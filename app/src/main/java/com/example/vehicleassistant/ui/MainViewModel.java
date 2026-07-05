@@ -178,11 +178,13 @@ public class MainViewModel extends AndroidViewModel {
     // ==================== 语音交互 ====================
 
     private void initVoiceKit(Application app) {
+        android.util.Log.d("MainViewModel", "initVoiceKit starting...");
         try {
             voiceKitManager = new com.cornex.voicekit.VoiceKitManager();
             voiceKitManager.init(app.getApplicationContext(), new com.cornex.voicekit.api.IInitResult() {
                 @Override
                 public void onSuccess() {
+                    android.util.Log.d("MainViewModel", "VoiceKit init success");
                     asr = voiceKitManager.asr();
                     tts = voiceKitManager.tts();
                     asr.initAsr(app.getApplicationContext());
@@ -193,10 +195,12 @@ public class MainViewModel extends AndroidViewModel {
 
                 @Override
                 public void onFail(String errorMsg) {
+                    android.util.Log.e("MainViewModel", "VoiceKit init failed: " + errorMsg);
                     voiceKitReady.postValue(false);
                 }
             });
         } catch (Exception e) {
+            android.util.Log.e("MainViewModel", "VoiceKit init exception: " + e.getMessage());
             voiceKitReady.postValue(false);
         }
     }
@@ -205,23 +209,27 @@ public class MainViewModel extends AndroidViewModel {
         return new com.cornex.voicekit.asr.IAsrResultListener() {
             @Override
             public void onStart() {
+                android.util.Log.d("MainViewModel", "ASR onStart");
                 asrListening.postValue(true);
             }
 
             @Override
             public void onResult(int status, String result) {
-                if (status == com.cornex.voicekit.constants.VoiceKitDef.FINAL_PART) {
+                android.util.Log.d("MainViewModel", "ASR onResult status=" + status + " result=" + result);
+                if (result != null && !result.isEmpty()) {
                     mainHandler.post(() -> onAsrResult(result));
                 }
             }
 
             @Override
             public void onFinish() {
+                android.util.Log.d("MainViewModel", "ASR onFinish");
                 asrListening.postValue(false);
             }
 
             @Override
             public void onFail(String errorMsg) {
+                android.util.Log.e("MainViewModel", "ASR onFail: " + errorMsg);
                 asrListening.postValue(false);
             }
         };
@@ -230,23 +238,28 @@ public class MainViewModel extends AndroidViewModel {
     public void toggleListening() {
         // 场景4: 模型推理中阻止（inputEnabled=false 表示模型正在处理中）
         if (!Boolean.TRUE.equals(inputEnabled.getValue())) {
+            android.util.Log.d("MainViewModel", "toggleListening blocked: inputEnabled=false");
             android.widget.Toast.makeText(getApplication(), "模型正在处理中，请稍候",
                     android.widget.Toast.LENGTH_SHORT).show();
             return;
         }
-        if (asr == null) return;
+        if (asr == null) {
+            android.util.Log.e("MainViewModel", "toggleListening: asr is null");
+            return;
+        }
 
         Boolean listening = asrListening.getValue();
         if (listening != null && listening) {
-            // 场景2: 手动结束录音
+            android.util.Log.d("MainViewModel", "toggleListening: stopping record");
             asr.stopRecord();
         } else {
-            // 检查权限, 开始录音
+            android.util.Log.d("MainViewModel", "toggleListening: starting record");
             asr.startRecord();
         }
     }
 
     public void onAsrResult(String text) {
+        android.util.Log.d("MainViewModel", "onAsrResult: text='" + text + "'");
         if (text != null && !text.trim().isEmpty()) {
             asrResult.postValue(text.trim());
         } else {
