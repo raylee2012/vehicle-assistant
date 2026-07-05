@@ -56,7 +56,7 @@ public class CommandPipeline {
             // 实际上 target 在 VehicleService.execute 中填充，
             // 所以我们使用一个占位来标记
             String key = cmd.target != null ? cmd.target
-                : (cmd.action + "_" + cmd.params.getOrDefault("position", ""));
+                : (cmd.action + "_" + (cmd.params != null ? cmd.params.getOrDefault("position", "") : ""));
             map.put(key, cmd);
         }
         return new ArrayList<>(map.values());
