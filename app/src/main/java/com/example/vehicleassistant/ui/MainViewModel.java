@@ -3,6 +3,9 @@ package com.example.vehicleassistant.ui;
 import android.app.Application;
 
 import androidx.annotation.NonNull;
+import android.os.Handler;
+import android.os.Looper;
+
 import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
@@ -28,6 +31,7 @@ public class MainViewModel extends AndroidViewModel {
     private final MutableLiveData<Integer> downloadProgress = new MutableLiveData<>(0);
     private final MutableLiveData<String> downloadStatus = new MutableLiveData<>("");
 
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private AgentManager agentManager;
     private ChatAdapter adapter;
     private ModelDownloadManager downloadManager;
@@ -128,9 +132,11 @@ public class MainViewModel extends AndroidViewModel {
         statusText.setValue("思考中...");
 
         agentManager.receive(text, response -> {
-            adapter.addAssistantMessage(response.text, response.execResults);
-            inputEnabled.postValue(true);
-            statusText.postValue("就绪");
+            mainHandler.post(() -> {
+                adapter.addAssistantMessage(response.text, response.execResults);
+                inputEnabled.setValue(true);
+                statusText.setValue("就绪");
+            });
         });
     }
 

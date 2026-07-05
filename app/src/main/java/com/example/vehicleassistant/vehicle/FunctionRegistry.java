@@ -187,7 +187,6 @@ public class FunctionRegistry {
                 obj.put("description", tool.description);
 
                 JSONObject props = new JSONObject();
-                JSONArray required = new JSONArray();
                 for (ParamDef p : tool.params) {
                     JSONObject prop = new JSONObject();
                     prop.put("type", p.type);
@@ -198,23 +197,18 @@ public class FunctionRegistry {
                         prop.put("enum", new JSONArray(p.enumValues));
                     }
                     props.put(p.name, prop);
-                    required.put(p.name); // 所有参数都是必填
                 }
                 obj.put("parameters", new JSONObject() {{
                     put("type", "object");
                     put("properties", props);
-                    put("required", required);
                 }});
-                obj.put("_requireParked", tool.requireParked);
-                obj.put("_critical", tool.critical);
-                obj.put("_target", tool.target);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to build schema for " + tool.name, e);
             }
             arr.put(obj);
         }
         try {
-            cachedSchema = arr.toString(2);
+            cachedSchema = arr.toString(); // 无缩进，压缩 prompt 体积
         } catch (Exception e) {
             throw new RuntimeException("Failed to serialize schema", e);
         }

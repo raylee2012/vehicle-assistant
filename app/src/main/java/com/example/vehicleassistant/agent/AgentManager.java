@@ -3,6 +3,7 @@ package com.example.vehicleassistant.agent;
 import android.util.Log;
 
 import com.example.vehicleassistant.engine.LlamaEngine;
+import com.example.vehicleassistant.engine.MockCommandExtractor;
 import com.example.vehicleassistant.engine.OutputParser;
 import com.example.vehicleassistant.engine.PromptBuilder;
 import com.example.vehicleassistant.model.ChatMessage;
@@ -38,6 +39,11 @@ public class AgentManager {
     private volatile boolean processing = false;
     private String pendingInput = null;
 
+    // 骨架占位输出的特征字符串，用于判断是否走 mock 推理
+    private static final String SKELETON_PLACEHOLDER =
+        "[{\"action\":\"set_ac\",\"params\":{\"power\":true,\"temp\":22,\"mode\":\"auto\"}}]";
+
+    private final MockCommandExtractor mockExtractor = new MockCommandExtractor();
     private String cachedSystemPrompt;
 
     public AgentManager(LlamaEngine engine, FunctionRegistry registry,
@@ -88,10 +94,24 @@ public class AgentManager {
             // --- 第一次推理（意图提取）---
             String firstPrompt = promptBuilder.buildFirstInferencePrompt(
                 cachedSystemPrompt, contextManager.getHistory(), userInput);
-            Log.d(TAG, "First inference...");
+            Log.d(TAG, "First inference... prompt=" + firstPrompt.length() + "chars, schema="
+                + cachedSystemPrompt.length() + "chars");
             String firstOutput = engine.infer(firstPrompt);
+            Log.d(TAG, "First output(" + firstOutput.length() + "chars): " + firstOutput);
+
+            // 骨架占位检测：如果是硬编码的占位输出，使用关键词 mock 推理
+            if (SKELETON_PLACEHOLDER.equals(firstOutput.trim())) {
+                String mockJson = mockExtractor.extract(userInput);
+                if (mockJson != null) {
+                    firstOutput = mockJson;
+                    Log.d(TAG, "使用 mock 推理: " + mockJson);
+                }
+            }
 
             OutputParser.ParseResult parseResult = outputParser.parse(firstOutput);
+            Log.d(TAG, "Parse result: isCommands=" + parseResult.isCommands
+                + " commands=" + (parseResult.commands != null ? parseResult.commands.size() : 0)
+                + " text=" + (parseResult.text != null ? parseResult.text : "null"));
 
             if (parseResult.isCommands) {
                 // 车控模式: 执行 + 第二次推理

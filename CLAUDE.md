@@ -66,9 +66,11 @@ Gradle 分发源使用腾讯云镜像，Maven 仓库使用阿里云镜像。JDK 
 
 ### Engine 层
 - `LlamaEngine` — JNI 桥接层，Java 侧提供 `init(ModelConfig)`, `infer(String):String`, `release()`, `isLoaded()`，所有方法 synchronized
-- C++ 侧 (`llama_jni.cpp`) 为骨架实现，`LlamaContext` 结构体预留了 llama.cpp 指针字段，`nativeInfer` 当前返回占位 JSON
+- `llama_jni.cpp` — 完整接入 llama.cpp (b9871)，CPU-only 静态链接 libllama + libggml + libllama-common，ARM NEON/dotprod/fp16 优化
+- `libllama_jni.so` — Debug ~83MB（unstripped），Release ~15-20MB，APK 从 5.6MB → 16MB
+- `MockCommandExtractor` — 当模型文件不存在时的关键词匹配兜底，覆盖全部 23 个车控方法
 - `PromptBuilder` — 组装 Qwen2.5 ChatML 格式 (`<|im_start|>system/user/assistant<|im_end|>`)，区分第一次推理(意图提取)和第二次推理(结果汇总)
-- `OutputParser` — 优先尝试 JSON 数组解析，修复常见格式错误(尾逗号、单引号)，失败则 fallback 到纯文本(闲聊兜底)
+- `OutputParser` — 优先尝试 JSON 数组解析，修复常见格式错误(尾逗号、单引号)，失败则兜底到纯文本(闲聊兜底)
 
 ### Agent 层
 - `AgentManager` — 对话编排核心，单线程 ExecutorService 保证消息串行处理，pendingInput 队列处理快速连发
@@ -92,9 +94,13 @@ Gradle 分发源使用腾讯云镜像，Maven 仓库使用阿里云镜像。JDK 
 
 推理参数: temperature=0.1, top_p=0.9, max_tokens=512, threads=4
 
-## 模型配置
+## 模型与 llama.cpp
 
-模型不打包进 APK。首次启动检查 `ExternalFilesDir/models/qwen2.5-1.5b-instruct-q4_k_m.gguf`，未找到则提示下载路径。在 HuggingFace 搜索 `qwen2.5-1.5b-instruct-gguf` 找 Q4_K_M 后缀的 gguf 文件。
+- llama.cpp 作为 git submodule (`llama.cpp/`) 管理，tag `b9871`
+- 模型不打包进 APK。首次启动检查 `ExternalFilesDir/models/qwen2.5-1.5b-instruct-q4_k_m.gguf`
+- 模型未找到时显示下载界面（HuggingFace 主地址 + ModelScope 备用镜像）
+- 模型也未加载时 `AgentManager` 自动使用 `MockCommandExtractor` 关键词匹配兜底
+- 真实推理和 mock 之间无感切换：骨架占位检测 → mock 覆盖 → 真实模型加载后自动走 llama.cpp
 
 ## 设计约束
 
@@ -102,5 +108,7 @@ Gradle 分发源使用腾讯云镜像，Maven 仓库使用阿里云镜像。JDK 
 - `nonCritical` 指令失败跳过继续，`critical` 指令失败中断后续执行
 - 用户快速连发时，消息排队串行处理，丢弃中间未完成的输入
 - 推理前检查可用内存（< 200MB 时提示用户）
-- llama.cpp 真实接入点: `llama_jni.cpp` 中的 TODO 标记 + `CMakeLists.txt` 中的注释块
+- org.json 库由 Android SDK 内置提供，无需额外依赖
+- llama.cpp 源码: `llama.cpp/` (git submodule)，CMake 配置: `app/src/main/cpp/CMakeLists.txt`
+- 国内网络克隆 llama.cpp 时可能需要镜像代理（如 ghfast.top）
 - org.json 库由 Android SDK 内置提供，无需额外依赖

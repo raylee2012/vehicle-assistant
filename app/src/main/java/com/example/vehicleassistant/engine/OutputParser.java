@@ -50,21 +50,43 @@ public class OutputParser {
     }
 
     private List<ActionCommand> tryParseJson(String text) {
-        // 策略1: 直接解析
+        // 策略1: JSON 数组 [{...}, {...}]
         String json = extractJsonArray(text);
-        if (json == null) return null;
-
-        try {
-            return parseCommandArray(json);
-        } catch (Exception e) {
-            // 策略2: 修复常见格式错误后重试
-            json = repairCommonErrors(json);
+        if (json != null) {
             try {
                 return parseCommandArray(json);
-            } catch (Exception e2) {
-                return null;
+            } catch (Exception e) {
+                json = repairCommonErrors(json);
+                try {
+                    return parseCommandArray(json);
+                } catch (Exception e2) {
+                    // fall through to single-object parsing
+                }
             }
         }
+
+        // 策略2: 单个 JSON 对象 {...} (模型常忽略数组包装)
+        json = extractJsonObject(text);
+        if (json != null) {
+            try {
+                JSONObject obj = new JSONObject(json);
+                if (obj.has("action") && obj.has("params")) {
+                    return parseSingleCommand(obj);
+                }
+            } catch (Exception e) {
+                // try repairing
+                try {
+                    JSONObject obj = new JSONObject(repairCommonErrors(json));
+                    if (obj.has("action") && obj.has("params")) {
+                        return parseSingleCommand(obj);
+                    }
+                } catch (Exception e2) {
+                    return null;
+                }
+            }
+        }
+
+        return null;
     }
 
     private String extractJsonArray(String text) {
@@ -72,6 +94,31 @@ public class OutputParser {
         int end = text.lastIndexOf(']');
         if (start == -1 || end == -1 || start >= end) return null;
         return text.substring(start, end + 1);
+    }
+
+    private String extractJsonObject(String text) {
+        int start = text.indexOf('{');
+        int end = text.lastIndexOf('}');
+        if (start == -1 || end == -1 || start >= end) return null;
+        return text.substring(start, end + 1);
+    }
+
+    private List<ActionCommand> parseSingleCommand(JSONObject obj) throws Exception {
+        ActionCommand cmd = new ActionCommand();
+        cmd.action = obj.getString("action");
+        if (obj.has("params")) {
+            JSONObject p = obj.getJSONObject("params");
+            java.util.HashMap<String, Object> params = new java.util.HashMap<>();
+            java.util.Iterator<String> keys = p.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                params.put(k, p.get(k));
+            }
+            cmd.params = params;
+        }
+        List<ActionCommand> list = new ArrayList<>();
+        list.add(cmd);
+        return list;
     }
 
     private String repairCommonErrors(String json) {

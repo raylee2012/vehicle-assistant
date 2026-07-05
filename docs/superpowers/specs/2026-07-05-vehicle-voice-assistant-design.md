@@ -148,12 +148,57 @@ public ExecutionResult execute(String action, Map<String, Object> params) {
 ### LlamaEngine（JNI 桥接）
 
 ```
-LlamaEngine.java    ← Java 层: init(modelPath), infer(prompt), release()
-    │ JNI
-llama_jni.cpp       ← C++ 适配: llama.cpp API, 内存管理, 回调
+LlamaEngine.java    ← Java 层: init(ModelConfig), infer(String):String, release(), isLoaded()
+    │ JNI (llama_jni.cpp)
     │
-libllama.so         ← 预编译 .so (android arm64-v8a)
+libllama_jni.so     ← 静态链接 llama + ggml + llama-common (CPU-only, arm64-v8a)
+    │
+libllama.a          ← llama.cpp (b9871) 核心库：模型加载、推理、采样
+libggml.a           ← GGML 张量计算库：ARM NEON/dotprod/fp16 优化
+libllama-common.a   ← Chat template、sampling 工具
 ```
+
+### llama.cpp 集成详情
+
+| 项目 | 值 |
+|------|-----|
+| **源码** | `llama.cpp/` (git submodule, tag `b9871`) |
+| **仓库地址** | `https://github.com/ggml-org/llama.cpp.git` |
+| **构建方式** | CMake `add_subdirectory()` 静态链接进 `libllama_jni.so` |
+| **CPU 优化** | `armv8.6-a+dotprod+fp16` — 点积指令 + 半精度浮点 |
+| **禁用项** | OpenMP, Llamafile, CUDA, Vulkan, Metal（Android CPU-only） |
+| **CMake 配置** | `app/src/main/cpp/CMakeLists.txt` |
+| **代理机制** | HuggingFace 下载异常时可换用 ghfast.top 镜像克隆源码 |
+
+**JNI 推理流程：**
+
+```
+nativeInit(modelPath, ctxSize, threads)
+  → llama_backend_init()
+  → llama_model_load_from_file(path, params)
+  → llama_init_from_model(model, ctx_params)
+  → 返回 native pointer (jlong)
+
+nativeInfer(ptr, prompt)
+  → llama_tokenize()       ← 分词
+  → llama_decode() × N     ← 批量推理（batch=512）
+  → 采样循环 (max 512 tokens):
+      llama_sampler_sample() → token
+      llama_token_to_piece() → 文本
+      llama_decode()         ← 增量推理
+  → 返回生成文本
+
+nativeRelease(ptr)
+  → llama_free() + llama_model_free() + llama_backend_free()
+```
+
+**产物体积（debug）：**
+
+| 文件 | 大小 |
+|------|------|
+| `libllama_jni.so`（unstripped） | ~83 MB |
+| APK 增量 | 5.6 MB → 16 MB |
+| 预计 release stripped | ~15-20 MB（.so） |
 
 ### PromptBuilder
 
