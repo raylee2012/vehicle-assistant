@@ -8,8 +8,9 @@ set(LLAMA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../llama.cpp")
 
 # ═══════════════════════════════════════════════════════════════
 # CPU-only 交叉编译配置
-# 目标设备：RedMi Note Pro 13 (骁龙 7s Gen 2, ARMv8.6-A)
+# 目标设备：RedMi Note Pro 13 (骁龙 7s Gen 2, ARMv8.2-A)
 # 启用 NEON SIMD + dotprod 点积指令 + fp16 半精度浮点加速
+# Vulkan 暂不可用：需要宿主原生 C++17 编译器 + SPIRV-Headers
 # ═══════════════════════════════════════════════════════════════
 set(GGML_CPU ON CACHE BOOL "启用 CPU 后端" FORCE)
 set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "ARM 指令集优化目标（Cortex-A78 = ARMv8.2-A）" FORCE)

@@ -2,7 +2,7 @@ package com.example.vehicleassistant.model;
 
 public class ModelConfig {
     public final String modelPath;
-    public final int contextSize = 2048;
+    public final int contextSize = 1024;
     public final int maxTokens = 64;
     public final float temperature = 0.1f;
     public final float topP = 0.9f;

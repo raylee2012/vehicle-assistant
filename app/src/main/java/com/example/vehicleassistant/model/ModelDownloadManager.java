@@ -25,10 +25,10 @@ public class ModelDownloadManager {
     }
 
     public static final String DEFAULT_MODEL_URL =
-        "https://modelscope.cn/models/qwen/Qwen2.5-0.5B-Instruct-gguf/resolve/master/qwen2.5-0.5b-instruct-q4_k_m.gguf";
+        "https://modelscope.cn/models/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/master/qwen2.5-1.5b-instruct-q3_k_m.gguf";
 
     private static final String MIRROR_URL =
-        "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf";
+        "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q3_k_m.gguf";
 
     private static final String[] URLS = {DEFAULT_MODEL_URL, MIRROR_URL};
 

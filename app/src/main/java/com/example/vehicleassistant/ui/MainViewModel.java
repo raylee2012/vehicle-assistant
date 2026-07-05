@@ -43,14 +43,14 @@ public class MainViewModel extends AndroidViewModel {
         downloadManager = new ModelDownloadManager();
 
         File modelDir = new File(application.getExternalFilesDir(null), "models");
-        modelFile = new File(modelDir, "qwen2.5-0.5b-instruct-q4_k_m.gguf");
+        modelFile = new File(modelDir, "qwen2.5-1.5b-instruct-q3_k_m.gguf");
 
         if (modelFile.exists()) {
             downloadVisible.setValue(false);
             initEngine(application);
         } else {
             downloadVisible.setValue(true);
-            downloadStatus.setValue("需下载模型文件（约400MB）");
+            downloadStatus.setValue("需下载模型文件（约760MB）");
             statusText.setValue("模型未下载");
         }
     }
@@ -92,7 +92,7 @@ public class MainViewModel extends AndroidViewModel {
         }).start();
     }
 
-    private static final long MIN_MODEL_SIZE = 350_000_000L; // Q4_K_M 约 400MB
+    private static final long MIN_MODEL_SIZE = 700_000_000L; // Q3_K_M 约 760MB
 
     public void startDownload() {
         // 文件已存在且大小合理 → 直接初始化
