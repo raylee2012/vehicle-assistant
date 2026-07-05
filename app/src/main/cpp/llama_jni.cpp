@@ -112,10 +112,8 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInit(
     setenv("GGML_OPENCL_CACHE_DIR", cacheDir.c_str(), 1);
     LOGD("OpenCL 缓存目录: %s", cacheDir.c_str());
 
-    // 将轻量算子强制放 CPU 执行，产生 GPU↔CPU 同步间隙让 UI 渲染
-    // Q4_0 全部 tensor 在 GPU 会连续执行无间隙，通过 opfilter 把轻量 op 推回 CPU
-    setenv("GGML_OPENCL_OPFILTER", "ADD|MUL|RMS_NORM|CPY|ROPE|SOFT_MAX", 1);
-    LOGD("OpenCL opfilter: ADD|MUL|RMS_NORM|CPY|ROPE|SOFT_MAX → CPU");
+    // Q3_K_M 天然 CPU/GPU 混合（约 112/339 tensor 在 GPU），无需 opfilter
+    // GPU↔CPU 同步间隙由 Q3_K 算子部分不支持 GPU 自然产生
 
     auto t_start = std::chrono::steady_clock::now();
 
