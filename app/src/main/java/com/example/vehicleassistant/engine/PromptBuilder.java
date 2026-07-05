@@ -10,12 +10,8 @@ import java.util.List;
 public class PromptBuilder {
 
     private static final String SYSTEM_TEMPLATE =
-        "你是车控助手。规则:\n" +
-        "- 车控指令→输出JSON:[{\"action\":\"name\",\"params\":{}}]\n" +
-        "- 一条也需[]包裹\n" +
-        "- 闲聊/模糊→回文本\n\n" +
-        "状态: {vehicle_state}\n\n" +
-        "方法(格式:name|param1(enum/int)|param2):\n" +
+        "车控助手。指令→JSON数组[{\"action\":\"n\",\"params\":{}}]，闲聊→文本。\n" +
+        "{vehicle_state}\n" +
         "{tools_schema}";
 
     private static final String RESULT_PROMPT =

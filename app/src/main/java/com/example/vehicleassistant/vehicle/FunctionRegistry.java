@@ -107,7 +107,7 @@ public class FunctionRegistry {
                 } else if (p.min != null && p.max != null) {
                     sb.append(p.min).append("-").append(p.max);
                 } else {
-                    sb.append(p.type);
+                    sb.append("b");
                 }
                 sb.append(")");
             }

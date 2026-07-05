@@ -158,13 +158,11 @@ public class AgentManager {
     }
 
     private String buildVehicleStateSummary() {
-        return "空调: " + (vehicleState.acPower ? "开启 " + vehicleState.acTemp + "度 " + vehicleState.acMode : "关闭") +
-               "\n风扇: " + vehicleState.fanSpeed + "级" +
-               "\n循环: " + vehicleState.airCirculation +
-               "\n除霜: 前=" + vehicleState.frontDefrost + " 后=" + vehicleState.rearDefrost +
-               "\n车门锁: " + (vehicleState.doorLocked ? "已锁" : "未锁") +
-               "\n驾驶模式: " + vehicleState.driveMode +
-               "\n驻车状态: " + (vehicleState.isParked ? "已驻车" : "行驶中");
+        return "状态: AC=" + (vehicleState.acPower ? "开" + vehicleState.acTemp + "°" + vehicleState.acMode : "关") +
+               " 风=" + vehicleState.fanSpeed +
+               " 锁=" + (vehicleState.doorLocked ? "锁" : "开") +
+               " 驾=" + vehicleState.driveMode +
+               " P=" + (vehicleState.isParked ? "1" : "0");
     }
 
     public List<ChatMessage> getHistory() {
