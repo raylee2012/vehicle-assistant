@@ -1,0 +1,39 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Android
+app/build/
+app/.cxx/
+app/release/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated
+*.class
+*.dex
+*.log
+app/src/main/java/com/example/vehicleassistant/databinding/
+
+# Claude
+.claude/
+
+# Docs (spec 和 plan 在 git 中跟踪，其余忽略)
+docs/superpowers/sdd/
+
+# Superpowers scratch
+.superpowers/
