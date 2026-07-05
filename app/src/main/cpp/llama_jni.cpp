@@ -163,8 +163,8 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInfer(
     // 先清零 KV cache，避免多次推理间缓存累积超出 n_ctx 限制
     llama_memory_clear(llama_get_memory(ctx->ctx), true);
 
-    // 每次最多处理 512 个 token，超长输入分多批执行
-    const int n_batch = 512;
+    // 每次最多处理 1024 个 token，超长输入分多批执行
+    const int n_batch = 1024;
     for (size_t i = 0; i < tokens.size(); i += n_batch) {
         int n = std::min(n_batch, static_cast<int>(tokens.size() - i));
         if (llama_decode(ctx->ctx, llama_batch_get_one(tokens.data() + i, n)) != 0) {
@@ -177,7 +177,7 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInfer(
     // 采样链：Temperature(0.1) → Top-P(0.9) → 随机种子(1234)
     // 温度 0.1 接近贪心解码，适合车控这种需要确定性输出的场景
     std::string output;
-    const int max_new = 64; // 最多生成 64 个新 token（车控 JSON 通常只需 15-30 tokens）
+    const int max_new = 32; // 车控 JSON 通常只需 10-20 tokens
     const auto sparams = llama_sampler_chain_default_params();
     auto* smpl = llama_sampler_chain_init(sparams);
     llama_sampler_chain_add(smpl, llama_sampler_init_temp(0.1f));      // 低温度 → 确定性

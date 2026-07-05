@@ -10,15 +10,13 @@ import java.util.List;
 public class PromptBuilder {
 
     private static final String SYSTEM_TEMPLATE =
-        "你是智能车控助手。根据用户意图选择行动:\n" +
-        "- 车控指令 → 严格输出 JSON 数组: [{\"action\":\"方法名\",\"params\":{参数}}]\n" +
-        "- 一次可包含多条指令\n" +
-        "- 闲聊/模糊意图/否定意图 → 直接回复文本，不要输出 JSON\n" +
-        "- 模糊意图需向用户追问确认参数后再执行\n" +
-        "- \"不要开空调\"\"别关窗\"等否定意图 = 不调用对应方法，改用文本回复\n\n" +
-        "当前车辆状态:\n" +
-        "{vehicle_state}\n\n" +
-        "可用方法:\n" +
+        "你是车控助手。规则:\n" +
+        "- 车控指令→输出JSON数组:[{\"action\":\"方法名\",\"params\":{}}]\n" +
+        "- 一条指令也要用[]包裹\n" +
+        "- 闲聊/模糊/否定→直接回文本,不输出JSON\n" +
+        "- 模糊意图需追问确认\n\n" +
+        "车辆状态: {vehicle_state}\n\n" +
+        "方法:\n" +
         "{tools_schema}";
 
     private static final String RESULT_PROMPT =

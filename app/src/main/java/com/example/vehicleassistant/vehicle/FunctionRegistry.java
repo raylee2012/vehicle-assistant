@@ -179,39 +179,26 @@ public class FunctionRegistry {
     }
 
     private void buildSchema() {
-        JSONArray arr = new JSONArray();
+        StringBuilder sb = new StringBuilder();
         for (ToolDefinition tool : tools.values()) {
-            JSONObject obj = new JSONObject();
-            try {
-                obj.put("name", tool.name);
-                obj.put("description", tool.description);
-
-                JSONObject props = new JSONObject();
-                for (ParamDef p : tool.params) {
-                    JSONObject prop = new JSONObject();
-                    prop.put("type", p.type);
-                    prop.put("description", p.description);
-                    if (p.min != null) prop.put("minimum", p.min);
-                    if (p.max != null) prop.put("maximum", p.max);
-                    if (p.enumValues != null) {
-                        prop.put("enum", new JSONArray(p.enumValues));
+            sb.append("- ").append(tool.name).append(": ").append(tool.description);
+            for (ParamDef p : tool.params) {
+                sb.append(" | ").append(p.name).append("(").append(p.type);
+                if (p.enumValues != null) {
+                    sb.append(":");
+                    for (int i = 0; i < p.enumValues.size(); i++) {
+                        if (i > 0) sb.append("/");
+                        sb.append(p.enumValues.get(i));
                     }
-                    props.put(p.name, prop);
                 }
-                obj.put("parameters", new JSONObject() {{
-                    put("type", "object");
-                    put("properties", props);
-                }});
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to build schema for " + tool.name, e);
+                if (p.min != null && p.max != null) {
+                    sb.append(":").append(p.min).append("-").append(p.max);
+                }
+                sb.append(")=").append(p.description);
             }
-            arr.put(obj);
+            sb.append("\n");
         }
-        try {
-            cachedSchema = arr.toString(); // 无缩进，压缩 prompt 体积
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to serialize schema", e);
-        }
+        cachedSchema = sb.toString();
     }
 
     public String generateToolsSchema() {
