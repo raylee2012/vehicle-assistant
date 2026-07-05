@@ -113,6 +113,15 @@ public class AgentManager {
                 + " commands=" + (parseResult.commands != null ? parseResult.commands.size() : 0)
                 + " text=" + (parseResult.text != null ? parseResult.text : "null"));
 
+            // 0.5B 模型可能输出文本而非 JSON，用关键词提取兜底
+            if (!parseResult.isCommands) {
+                String mockJson = mockExtractor.extract(userInput);
+                if (mockJson != null) {
+                    parseResult = outputParser.parse(mockJson);
+                    Log.d(TAG, "Mock fallback: " + mockJson);
+                }
+            }
+
             if (parseResult.isCommands) {
                 // 车控模式: 执行 + 第二次推理
                 List<ExecutionResult> execResults = pipeline.execute(parseResult.commands);
