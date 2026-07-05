@@ -2,6 +2,7 @@ package com.example.vehicleassistant.ui;
 
 import android.Manifest;
 import android.animation.ValueAnimator;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
@@ -39,6 +40,7 @@ public class ChatActivity extends AppCompatActivity {
     private Button btnDownload;
     private TextView tvDownloadStatus;
     private ImageView btnMic;
+    private TextView btnSettings;
     private ValueAnimator voicePulseAnimator;
 
     // Critical 1: RECORD_AUDIO runtime permission launcher
@@ -68,6 +70,9 @@ public class ChatActivity extends AppCompatActivity {
         btnDownload = binding.btnDownload;
         tvDownloadStatus = binding.tvDownloadStatus;
         btnMic = binding.btnMic;
+        btnSettings = binding.btnSettings;
+        btnSettings.setOnClickListener(v ->
+                startActivity(new Intent(this, SettingsActivity.class)));
 
         viewModel = new ViewModelProvider(this,
                 ViewModelProvider.AndroidViewModelFactory.getInstance(this.getApplication()))

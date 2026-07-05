@@ -39,6 +39,7 @@ public class AgentManager {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private volatile boolean processing = false;
     private String pendingInput = null;
+    private boolean pendingMockFirst = true;
 
     // 骨架占位输出的特征字符串，用于判断是否走 mock 推理
     private static final String SKELETON_PLACEHOLDER =
@@ -66,16 +67,17 @@ public class AgentManager {
     /**
      * 接收用户输入。如果正在处理中则排队。
      */
-    public void receive(String userInput, Callback callback) {
+    public void receive(String userInput, Callback callback, boolean mockFirst) {
         if (processing) {
             pendingInput = userInput;
+            pendingMockFirst = mockFirst;
             return;
         }
         processing = true;
-        executor.execute(() -> processMessage(userInput, callback));
+        executor.execute(() -> processMessage(userInput, callback, mockFirst));
     }
 
-    private void processMessage(String userInput, Callback callback) {
+    private void processMessage(String userInput, Callback callback, boolean mockFirst) {
         try {
             // 检查可用内存 (粗略)
             Runtime rt = Runtime.getRuntime();
@@ -101,29 +103,33 @@ public class AgentManager {
                     registry.generateToolsSchema(), stateSummary);
             }
 
-            // --- 意图提取：优先关键词匹配（确定性），模型兜底 ---
-            String mockJson = mockExtractor.extract(userInput);
+            // --- 意图提取：mockFirst 决定优先级 ---
             OutputParser.ParseResult parseResult;
-            String firstOutput;  // 第一次推理输出，用于第二次推理 prompt
+            String firstOutput;
 
-            if (mockJson != null) {
-                // 关键词命中 → 直接用 mock 结果，不走模型第一次推理
-                firstOutput = mockJson;
-                parseResult = outputParser.parse(mockJson);
-                Log.d(TAG, "Mock intent: " + mockJson);
+            if (mockFirst) {
+                // Mock 优先：关键词匹配 → 模型兜底
+                String mockJson = mockExtractor.extract(userInput);
+                if (mockJson != null) {
+                    firstOutput = mockJson;
+                    parseResult = outputParser.parse(mockJson);
+                    Log.d(TAG, "Mock intent: " + mockJson);
+                } else {
+                    firstOutput = doModelInference(userInput);
+                    parseResult = outputParser.parse(firstOutput);
+                }
             } else {
-                // 未命中关键词 → 模型推理
-                String firstPrompt = promptBuilder.buildFirstInferencePrompt(
-                    cachedSystemPrompt, contextManager.getHistory(), userInput);
-                Log.d(TAG, "First inference... prompt=" + firstPrompt.length() + "chars, schema="
-                    + cachedSystemPrompt.length() + "chars");
-                firstOutput = engine.infer(firstPrompt);
-                Log.d(TAG, "First output(" + firstOutput.length() + "chars): " + firstOutput);
-
+                // 模型优先：Function Calling → Mock 兜底
+                firstOutput = doModelInference(userInput);
                 parseResult = outputParser.parse(firstOutput);
-                Log.d(TAG, "Parse result: isCommands=" + parseResult.isCommands
-                    + " commands=" + (parseResult.commands != null ? parseResult.commands.size() : 0)
-                    + " text=" + (parseResult.text != null ? parseResult.text : "null"));
+                if (!parseResult.isCommands || SKELETON_PLACEHOLDER.equals(firstOutput.trim())) {
+                    String mockJson = mockExtractor.extract(userInput);
+                    if (mockJson != null) {
+                        firstOutput = mockJson;
+                        parseResult = outputParser.parse(mockJson);
+                        Log.d(TAG, "Model failed, mock fallback: " + mockJson);
+                    }
+                }
             }
 
             if (parseResult.isCommands) {
@@ -165,9 +171,18 @@ public class AgentManager {
             if (pendingInput != null) {
                 String next = pendingInput;
                 pendingInput = null;
-                receive(next, callback);
+                receive(next, callback, pendingMockFirst);
             }
         }
+    }
+
+    private String doModelInference(String userInput) {
+        String firstPrompt = promptBuilder.buildFirstInferencePrompt(
+            cachedSystemPrompt, contextManager.getHistory(), userInput);
+        Log.d(TAG, "Model inference... prompt=" + firstPrompt.length() + "chars");
+        String output = engine.infer(firstPrompt);
+        Log.d(TAG, "Model output(" + output.length() + "chars): " + output);
+        return output;
     }
 
     private String buildVehicleStateSummary() {

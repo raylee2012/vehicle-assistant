@@ -17,6 +17,7 @@ import com.example.vehicleassistant.model.ModelDownloadManager;
 import com.example.vehicleassistant.vehicle.FunctionRegistry;
 import com.example.vehicleassistant.vehicle.VehicleService;
 import com.example.vehicleassistant.vehicle.VehicleState;
+import com.example.vehicleassistant.ui.SettingsActivity;
 
 import java.io.File;
 
@@ -161,6 +162,7 @@ public class MainViewModel extends AndroidViewModel {
         statusText.setValue("思考中...");
         final int placeholderPos = adapter.addThinkingPlaceholder();
 
+        boolean mockFirst = SettingsActivity.isMockFirst(getApplication());
         agentManager.receive(text, response -> {
             mainHandler.post(() -> {
                 inputEnabled.setValue(true);
@@ -180,7 +182,7 @@ public class MainViewModel extends AndroidViewModel {
                     tts.startPlay(response.text);
                 }
             });
-        });
+        }, mockFirst);
     }
 
     // ==================== 语音交互 ====================
