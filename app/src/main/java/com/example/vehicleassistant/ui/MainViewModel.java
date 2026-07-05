@@ -31,11 +31,21 @@ public class MainViewModel extends AndroidViewModel {
     private final MutableLiveData<Integer> downloadProgress = new MutableLiveData<>(0);
     private final MutableLiveData<String> downloadStatus = new MutableLiveData<>("");
 
+    // 语音交互
+    private final MutableLiveData<Boolean> asrListening = new MutableLiveData<>(false);
+    private final MutableLiveData<Boolean> voiceKitReady = new MutableLiveData<>(false);
+    private final MutableLiveData<String> asrResult = new MutableLiveData<>(null);
+
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private AgentManager agentManager;
     private ChatAdapter adapter;
     private ModelDownloadManager downloadManager;
     private File modelFile;
+
+    private com.cornex.voicekit.VoiceKitManager voiceKitManager;
+    private com.cornex.voicekit.asr.IAsr asr;
+    private com.cornex.voicekit.tts.ITts tts;
+    private String pendingTtsText;
 
     public MainViewModel(@NonNull Application application) {
         super(application);
@@ -62,6 +72,7 @@ public class MainViewModel extends AndroidViewModel {
 
                 if (!modelFile.exists()) {
                     statusText.postValue("模型文件未找到");
+                    initVoiceKit(app);
                     downloadVisible.postValue(true);
                     return;
                 }
@@ -77,11 +88,15 @@ public class MainViewModel extends AndroidViewModel {
                 if (!engine.isLoaded()) {
                     modelFile.delete(); // 删除损坏文件，下次走下载路径
                     statusText.postValue("模型文件损坏，请重新下载");
+                    initVoiceKit(app);
                     downloadVisible.postValue(true);
                     return;
                 }
 
                 agentManager = new AgentManager(engine, registry, vehicleService, state);
+
+                // 初始化语音交互
+                initVoiceKit(app);
 
                 statusText.postValue("就绪");
                 inputEnabled.postValue(true);
@@ -151,9 +166,110 @@ public class MainViewModel extends AndroidViewModel {
                 adapter.addAssistantMessage(response.text, response.execResults);
                 inputEnabled.setValue(true);
                 statusText.setValue("就绪");
+
+                // TTS 自动播报助手回复
+                if (tts != null && response.text != null && !response.text.isEmpty()) {
+                    tts.stopPlay();
+                    tts.startPlay(response.text);
+                }
             });
         });
     }
+
+    // ==================== 语音交互 ====================
+
+    private void initVoiceKit(Application app) {
+        try {
+            voiceKitManager = new com.cornex.voicekit.VoiceKitManager();
+            voiceKitManager.init(app.getApplicationContext(), new com.cornex.voicekit.api.IInitResult() {
+                @Override
+                public void onSuccess() {
+                    asr = voiceKitManager.asr();
+                    tts = voiceKitManager.tts();
+                    asr.initAsr(app.getApplicationContext());
+                    tts.initTts();
+                    asr.setOnAsrResultListener(createAsrListener());
+                    voiceKitReady.postValue(true);
+                }
+
+                @Override
+                public void onFail(String errorMsg) {
+                    voiceKitReady.postValue(false);
+                }
+            });
+        } catch (Exception e) {
+            voiceKitReady.postValue(false);
+        }
+    }
+
+    private com.cornex.voicekit.asr.IAsrResultListener createAsrListener() {
+        return new com.cornex.voicekit.asr.IAsrResultListener() {
+            @Override
+            public void onStart() {
+                asrListening.postValue(true);
+            }
+
+            @Override
+            public void onResult(int status, String result) {
+                if (status == com.cornex.voicekit.constants.VoiceKitDef.FINAL_PART) {
+                    mainHandler.post(() -> onAsrResult(result));
+                }
+            }
+
+            @Override
+            public void onFinish() {
+                asrListening.postValue(false);
+            }
+
+            @Override
+            public void onFail(String errorMsg) {
+                asrListening.postValue(false);
+            }
+        };
+    }
+
+    public void toggleListening() {
+        // 场景4: 模型推理中阻止
+        if (agentManager != null && !agentManager.isReady()) {
+            android.widget.Toast.makeText(getApplication(), "模型正在处理中，请稍候",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (asr == null) return;
+
+        Boolean listening = asrListening.getValue();
+        if (listening != null && listening) {
+            // 场景2: 手动结束录音
+            asr.stopRecord();
+        } else {
+            // 检查权限, 开始录音
+            asr.startRecord();
+        }
+    }
+
+    public void onAsrResult(String text) {
+        if (text != null && !text.trim().isEmpty()) {
+            asrResult.postValue(text.trim());
+        } else {
+            // 场景3: 识别结果为空
+            android.widget.Toast.makeText(getApplication(), "未识别到语音，请重试",
+                    android.widget.Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    public void onAsrResultConsumed() {
+        asrResult.postValue(null);
+    }
+
+    /** Activity onPause 时调用 — 场景1: 录音中切后台自动停止 */
+    public void stopListeningOnPause() {
+        if (asr != null && Boolean.TRUE.equals(asrListening.getValue())) {
+            asr.stopRecord();
+            asrListening.postValue(false);
+        }
+    }
+
+    // ==================== Getters ====================
 
     public LiveData<String> getStatusText() { return statusText; }
     public LiveData<Boolean> getInputEnabled() { return inputEnabled; }
@@ -161,6 +277,9 @@ public class MainViewModel extends AndroidViewModel {
     public LiveData<Boolean> getDownloadActive() { return downloadActive; }
     public LiveData<Integer> getDownloadProgress() { return downloadProgress; }
     public LiveData<String> getDownloadStatus() { return downloadStatus; }
+    public LiveData<Boolean> getAsrListening() { return asrListening; }
+    public LiveData<Boolean> getVoiceKitReady() { return voiceKitReady; }
+    public LiveData<String> getAsrResult() { return asrResult; }
     public ChatAdapter getAdapter() { return adapter; }
 
     @Override
@@ -171,6 +290,9 @@ public class MainViewModel extends AndroidViewModel {
         }
         if (downloadManager != null) {
             downloadManager.cancel();
+        }
+        if (voiceKitManager != null) {
+            voiceKitManager.dispose();
         }
     }
 }
