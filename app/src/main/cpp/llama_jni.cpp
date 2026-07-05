@@ -12,16 +12,14 @@
  * 链接方式：静态链接 libllama.a + libggml.a + libllama-common.a
  *          全部打包进 libllama_jni.so，无需额外 .so 文件
  *
- * 编译目标：Android arm64-v8a (ARMv8.6-A + dotprod + fp16)
+ * 编译目标：Android arm64-v8a (ARMv8.2-A + dotprod + fp16)，纯 CPU 推理
  */
 
 #include <jni.h>
-#include <cstdlib>
 #include <string>
 #include <vector>
 #include <thread>
 #include <chrono>
-#include <sys/stat.h>
 #include <android/log.h>
 #include "llama.h"
 
@@ -86,34 +84,6 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInit(
     }, nullptr);
 
     auto* ctx = new LlamaContext();
-
-    // 设置 OpenCL 内核二进制缓存目录，避免每次启动都 JIT 编译
-    // 在 llama_backend_init() 之前必须设置好环境变量
-    std::string cacheDir(path);
-    auto pos = cacheDir.rfind('/');
-    if (pos != std::string::npos) {
-        cacheDir = cacheDir.substr(0, pos);  // 去掉文件名
-    }
-    pos = cacheDir.rfind('/');
-    if (pos != std::string::npos) {
-        cacheDir = cacheDir.substr(0, pos) + "/../cache/ocl_kernels";  // models/ → cache/ocl_kernels
-    }
-    // 创建缓存目录（mkdir -p 效果：逐级创建）
-    {
-        std::string mkdir_path;
-        for (size_t i = 0; i < cacheDir.size(); i++) {
-            mkdir_path += cacheDir[i];
-            if (cacheDir[i] == '/' && mkdir_path.size() > 1) {
-                mkdir(mkdir_path.c_str(), 0755);
-            }
-        }
-        mkdir(cacheDir.c_str(), 0755);
-    }
-    setenv("GGML_OPENCL_CACHE_DIR", cacheDir.c_str(), 1);
-    LOGD("OpenCL 缓存目录: %s", cacheDir.c_str());
-
-    // Q3_K_M 天然 CPU/GPU 混合（约 112/339 tensor 在 GPU），无需 opfilter
-    // GPU↔CPU 同步间隙由 Q3_K 算子部分不支持 GPU 自然产生
 
     auto t_start = std::chrono::steady_clock::now();
 
@@ -189,17 +159,20 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInfer(
         return env->NewStringUTF("[模型未初始化]");
     }
 
+    // 全局推理序号，关联同一次对话中的两次推理
+    static int inferSeq = 0;
+    int seq = ++inferSeq;
+    auto t0 = std::chrono::steady_clock::now();
+
     const char* input = env->GetStringUTFChars(prompt, nullptr);
     std::string text(input);
     int inputLen = static_cast<int>(text.size());
     env->ReleaseStringUTFChars(prompt, input);
 
-    LOGD("推理输入: %d 字符", inputLen);
+    LOGD("═══ 推理 #%d 开始 ═══", seq);
+    LOGD("输入: %d 字符", inputLen);
 
     // --- 第 1 步：Tokenize ---
-    // 第一次调用传 nullptr 获取所需缓冲区大小（返回负数表示计数模式）
-    // 第二次调用传实际缓冲区进行分词
-    // 参数：add_bos=true（添加句首标记）, parse_special=true（解析特殊 token）
     int n_tokens = -llama_tokenize(ctx->vocab, text.c_str(), inputLen, nullptr, 0, true, true);
     if (n_tokens < 0) {
         LOGE("Tokenize 失败：输入文本可能包含非法字符");
@@ -207,13 +180,13 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInfer(
     }
     std::vector<llama_token> tokens(n_tokens);
     llama_tokenize(ctx->vocab, text.c_str(), inputLen, tokens.data(), n_tokens, true, true);
-    LOGD("分词完成: %d tokens (ctx=%d)", n_tokens, llama_n_ctx(ctx->ctx));
+    auto t1 = std::chrono::steady_clock::now();
+    LOGD("分词: %d tokens (耗时 %lld ms)", n_tokens,
+        std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count());
 
     // --- 第 2 步：Prefill（批量推理输入 token）---
-    // 先清零 KV cache，避免多次推理间缓存累积超出 n_ctx 限制
     llama_memory_clear(llama_get_memory(ctx->ctx), true);
 
-    // 每次最多处理 1024 个 token，超长输入分多批执行
     const int n_batch = 1024;
     for (size_t i = 0; i < tokens.size(); i += n_batch) {
         int n = std::min(n_batch, static_cast<int>(tokens.size() - i));
@@ -222,42 +195,46 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInfer(
             return env->NewStringUTF("[推理错误]");
         }
     }
+    auto t2 = std::chrono::steady_clock::now();
+    LOGD("Prefill: 耗时 %lld ms",
+        std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 
     // --- 第 3 步：Generate（自回归采样生成）---
-    // 采样链：Temperature(0.1) → Top-P(0.9) → 随机种子(1234)
-    // 温度 0.1 接近贪心解码，适合车控这种需要确定性输出的场景
     std::string output;
-    const int max_new = 32; // 车控 JSON 通常只需 10-20 tokens
+    const int max_new = 32;
     const auto sparams = llama_sampler_chain_default_params();
     auto* smpl = llama_sampler_chain_init(sparams);
-    llama_sampler_chain_add(smpl, llama_sampler_init_temp(0.1f));      // 低温度 → 确定性
-    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(0.9f, 1));  // Top-P 核采样
-    llama_sampler_chain_add(smpl, llama_sampler_init_dist(1234));       // 随机种子
+    llama_sampler_chain_add(smpl, llama_sampler_init_temp(0.1f));
+    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(0.9f, 1));
+    llama_sampler_chain_add(smpl, llama_sampler_init_dist(1234));
 
-    const llama_token eos = llama_vocab_eos(ctx->vocab); // 结束标记
+    const llama_token eos = llama_vocab_eos(ctx->vocab);
+    int gen_tokens = 0;
     for (int i = 0; i < max_new; i++) {
-        // 采样一个 token
         llama_token token = llama_sampler_sample(smpl, ctx->ctx, -1);
-        if (token == eos) break; // 遇到 EOS 停止
+        if (token == eos) break;
 
-        // 步骤 4：token → 文本（边生成边拼接，避免最后再遍历一遍）
         char buf[256];
         int len = llama_token_to_piece(ctx->vocab, token, buf, sizeof(buf), 0, true);
         if (len > 0) output.append(buf, len);
+        gen_tokens++;
 
-        // 增量推理：把刚生成的 token 喂回去，更新 KV cache
         if (llama_decode(ctx->ctx, llama_batch_get_one(&token, 1)) != 0) {
             break;
-        }
-
-        // 每 4 个 token 让出 GPU 5ms 给 UI 渲染，防止 OpenCL 持续占用 GPU 导致卡顿
-        if ((i & 3) == 3) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     }
     llama_sampler_free(smpl);
 
-    LOGD("推理输出: %zu 字符", output.size());
+    auto t3 = std::chrono::steady_clock::now();
+    auto totalMs = std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t0).count();
+    auto genMs   = std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count();
+
+    LOGD("生成: %d tokens / %lld ms (%.1f tok/s)", gen_tokens, genMs,
+        genMs > 0 ? gen_tokens * 1000.0 / genMs : 0.0);
+    LOGD("═══ 推理 #%d 完成: 总耗时 %lld ms (prefill %lld + generate %lld), 输出 %zu 字符 ═══",
+        seq, totalMs,
+        std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count(),
+        genMs, output.size());
     return env->NewStringUTF(output.c_str());
 }
 
