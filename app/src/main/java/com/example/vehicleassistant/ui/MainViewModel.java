@@ -131,7 +131,8 @@ public class MainViewModel extends AndroidViewModel {
                 if (agentManager != null) {
                     agentManager.shutdown();
                 }
-                agentManager = new AgentManager(engine, registry, vehicleService, state);
+                boolean is15B = "1.5b".equals(currentModelKey);
+                agentManager = new AgentManager(engine, registry, vehicleService, state, is15B);
 
                 mainHandler.post(() -> initVoiceKit(app));
 

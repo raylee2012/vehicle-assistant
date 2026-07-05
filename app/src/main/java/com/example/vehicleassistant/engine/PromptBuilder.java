@@ -9,18 +9,34 @@ import java.util.List;
  */
 public class PromptBuilder {
 
-    private static final String SYSTEM_TEMPLATE =
+    private static final String SYSTEM_TEMPLATE_SIMPLE =
         "车控助手。指令→JSON数组[{\"action\":\"n\",\"params\":{}}]，闲聊→文本。\n" +
         "{vehicle_state}\n" +
         "{tools_schema}";
+
+    private static final String SYSTEM_TEMPLATE_DETAILED =
+        "你是车载语音助手。根据用户输入决定输出格式:\n" +
+        "- 车控指令 → 只输出JSON数组，禁止加解释文字\n" +
+        "- 闲聊 → 简短文本回复\n\n" +
+        "JSON格式: [{\"action\":\"方法名\",\"params\":{\"参数\":值}}]\n" +
+        "多个指令: [{\"action\":\"set_ac\",...},{\"action\":\"control_window\",...}]\n\n" +
+        "可用方法:\n{tools_schema}\n" +
+        "当前车辆状态: {vehicle_state}\n\n" +
+        "示例:\n" +
+        "用户: 打开空调26度 → [{\"action\":\"set_ac\",\"params\":{\"power\":true,\"temp\":26,\"mode\":\"auto\"}}]\n" +
+        "用户: 关闭车窗 → [{\"action\":\"control_window\",\"params\":{\"position\":\"all\",\"action\":\"close\"}}]\n" +
+        "用户: 打开空调并关闭车窗 → [{\"action\":\"set_ac\",\"params\":{\"power\":true,\"temp\":22,\"mode\":\"auto\"}},{\"action\":\"control_window\",\"params\":{\"position\":\"all\",\"action\":\"close\"}}]\n" +
+        "用户: 你好 → 你好！有什么可以帮你的？";
 
     private static final String RESULT_PROMPT =
         "根据以下车控执行结果，用自然语言简洁地向用户汇报:\n" +
         "{execution_results}\n\n" +
         "要求: 一句话总结，成功的提一下，失败的重点说。";
 
-    public String buildSystemPrompt(String toolsSchema, String vehicleStateSummary) {
-        return SYSTEM_TEMPLATE
+    /** @param detailed true=1.5B 详细 few-shot，false=0.5B 简洁版 */
+    public String buildSystemPrompt(String toolsSchema, String vehicleStateSummary, boolean detailed) {
+        String template = detailed ? SYSTEM_TEMPLATE_DETAILED : SYSTEM_TEMPLATE_SIMPLE;
+        return template
             .replace("{tools_schema}", toolsSchema)
             .replace("{vehicle_state}", vehicleStateSummary);
     }

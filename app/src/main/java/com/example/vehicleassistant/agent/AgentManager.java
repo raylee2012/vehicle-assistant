@@ -47,13 +47,16 @@ public class AgentManager {
 
     private final MockCommandExtractor mockExtractor = new MockCommandExtractor();
     private String cachedSystemPrompt;
+    private final boolean detailedPrompt;
 
     public AgentManager(LlamaEngine engine, FunctionRegistry registry,
-                        VehicleService vehicleService, VehicleState vehicleState) {
+                        VehicleService vehicleService, VehicleState vehicleState,
+                        boolean detailedPrompt) {
         this.engine = engine;
         this.registry = registry;
         this.vehicleService = vehicleService;
         this.vehicleState = vehicleState;
+        this.detailedPrompt = detailedPrompt;
         this.promptBuilder = new PromptBuilder();
         this.outputParser = new OutputParser();
         this.contextManager = new ContextManager();
@@ -100,7 +103,7 @@ public class AgentManager {
             if (cachedSystemPrompt == null) {
                 String stateSummary = buildVehicleStateSummary();
                 cachedSystemPrompt = promptBuilder.buildSystemPrompt(
-                    registry.generateToolsSchema(), stateSummary);
+                    registry.generateToolsSchema(), stateSummary, detailedPrompt);
             }
 
             // --- 意图提取：mockFirst 决定优先级 ---
@@ -140,7 +143,7 @@ public class AgentManager {
                 // 执行成功后更新 system prompt 中的车辆状态
                 String updatedStateSummary = buildVehicleStateSummary();
                 String updatedSystemPrompt = promptBuilder.buildSystemPrompt(
-                    registry.generateToolsSchema(), updatedStateSummary);
+                    registry.generateToolsSchema(), updatedStateSummary, detailedPrompt);
 
                 String secondPrompt = promptBuilder.buildSecondInferencePrompt(
                     updatedSystemPrompt, contextManager.getHistory(),
