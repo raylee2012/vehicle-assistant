@@ -22,7 +22,10 @@ set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
 set(GGML_CUDA OFF CACHE BOOL "" FORCE)
 set(GGML_METAL OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "NDK OpenMP 依赖问题" FORCE)
-set(GGML_LLAMAFILE OFF CACHE BOOL "Llamafile 不支持 Android" FORCE)
+set(GGML_LLAMAFILE ON CACHE BOOL "启用 Llamafile 优化 GEMM" FORCE)
+
+# 额外编译优化（-ffast-math 与 ggml 不兼容）
+add_compile_options(-O3)
 
 # 静态链接
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "生成静态库" FORCE)

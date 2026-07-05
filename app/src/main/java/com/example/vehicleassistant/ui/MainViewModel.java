@@ -43,7 +43,7 @@ public class MainViewModel extends AndroidViewModel {
         downloadManager = new ModelDownloadManager();
 
         File modelDir = new File(application.getExternalFilesDir(null), "models");
-        modelFile = new File(modelDir, "qwen2.5-1.5b-instruct-q3_k_m.gguf");
+        modelFile = new File(modelDir, "qwen2.5-0.5b-instruct-q4_k_m.gguf");
 
         if (modelFile.exists()) {
             downloadVisible.setValue(false);
