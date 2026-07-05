@@ -163,9 +163,16 @@ public class MainViewModel extends AndroidViewModel {
 
         agentManager.receive(text, response -> {
             mainHandler.post(() -> {
-                adapter.finishThinking(placeholderPos, response.text, response.execResults);
                 inputEnabled.setValue(true);
                 statusText.setValue("就绪");
+
+                if (response.videoSearchKeyword != null) {
+                    // 视频搜索：更新占位文字 + 插入视频卡片
+                    adapter.finishThinking(placeholderPos, response.text, null);
+                    adapter.addVideoSearchCard(response.videoSearchKeyword);
+                } else {
+                    adapter.finishThinking(placeholderPos, response.text, response.execResults);
+                }
 
                 // TTS 自动播报助手回复
                 if (tts != null && response.text != null && !response.text.isEmpty()) {

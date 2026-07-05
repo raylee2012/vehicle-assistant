@@ -3,12 +3,14 @@ package com.example.vehicleassistant.ui;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.vehicleassistant.R;
+import com.example.vehicleassistant.engine.VideoSearchHelper;
 import com.example.vehicleassistant.model.ChatMessage;
 import com.example.vehicleassistant.vehicle.models.ExecutionResult;
 
@@ -47,18 +49,28 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
         }
     }
 
+    private static final int TYPE_USER = 0;
+    private static final int TYPE_ASSISTANT = 1;
+    private static final int TYPE_VIDEO_SEARCH = 2;
+
     @Override
     public int getItemViewType(int position) {
         ChatMessage msg = items.get(position).message;
-        return ChatMessage.ROLE_USER.equals(msg.role) ? 0 : 1;
+        if (ChatMessage.TYPE_VIDEO_SEARCH.equals(msg.contentType)) return TYPE_VIDEO_SEARCH;
+        return ChatMessage.ROLE_USER.equals(msg.role) ? TYPE_USER : TYPE_ASSISTANT;
     }
 
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        int layoutId = viewType == 0
-            ? R.layout.item_message_user
-            : R.layout.item_message_assistant;
+        int layoutId;
+        if (viewType == TYPE_USER) {
+            layoutId = R.layout.item_message_user;
+        } else if (viewType == TYPE_VIDEO_SEARCH) {
+            layoutId = R.layout.item_message_video_search;
+        } else {
+            layoutId = R.layout.item_message_assistant;
+        }
         View view = LayoutInflater.from(parent.getContext())
             .inflate(layoutId, parent, false);
         return new ViewHolder(view);
@@ -67,9 +79,14 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         ChatItem item = items.get(position);
-        holder.tvMessage.setText(item.message.content);
-        holder.bindThinking(item);
+        int type = getItemViewType(position);
 
+        if (type == TYPE_VIDEO_SEARCH) {
+            holder.bindVideoSearch(item);
+        } else {
+            holder.tvMessage.setText(item.message.content);
+            holder.bindThinking(item);
+        }
     }
 
     @Override
@@ -80,6 +97,13 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
     public void addUserMessage(String text) {
         items.add(new ChatItem(
             new ChatMessage(ChatMessage.ROLE_USER, text), null));
+        notifyItemInserted(items.size() - 1);
+    }
+
+    public void addVideoSearchCard(String keyword) {
+        ChatItem item = new ChatItem(
+            new ChatMessage(ChatMessage.ROLE_ASSISTANT, keyword, ChatMessage.TYPE_VIDEO_SEARCH), null);
+        items.add(item);
         notifyItemInserted(items.size() - 1);
     }
 
@@ -130,6 +154,8 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         TextView tvMessage;
+        TextView tvVideoTitle;
+        Button btnOpenVideo;
 View reasoningHeader;
         TextView reasoningToggle;
         TextView reasoningTitle;
@@ -139,6 +165,8 @@ View reasoningHeader;
         ViewHolder(View itemView) {
             super(itemView);
             tvMessage = itemView.findViewById(R.id.tv_message);
+            tvVideoTitle = itemView.findViewById(R.id.tv_video_title);
+            btnOpenVideo = itemView.findViewById(R.id.btn_open_video);
 reasoningHeader = itemView.findViewById(R.id.reasoning_header);
             reasoningToggle = itemView.findViewById(R.id.reasoning_toggle);
             reasoningTitle = itemView.findViewById(R.id.reasoning_title);
@@ -175,6 +203,16 @@ reasoningHeader = itemView.findViewById(R.id.reasoning_header);
                     RecyclerView.Adapter<?> adapter = getBindingAdapter();
                     if (adapter != null) adapter.notifyItemChanged(pos);
                 });
+            }
+        }
+
+        void bindVideoSearch(ChatItem item) {
+            String keyword = item.message.content;
+            if (tvVideoTitle != null)
+                tvVideoTitle.setText("🎬 搜索：" + keyword);
+            if (btnOpenVideo != null) {
+                btnOpenVideo.setOnClickListener(v ->
+                    VideoSearchHelper.openSearch(v.getContext(), keyword));
             }
         }
     }

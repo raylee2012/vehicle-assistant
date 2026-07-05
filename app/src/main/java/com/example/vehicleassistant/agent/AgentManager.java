@@ -6,6 +6,7 @@ import com.example.vehicleassistant.engine.LlamaEngine;
 import com.example.vehicleassistant.engine.MockCommandExtractor;
 import com.example.vehicleassistant.engine.OutputParser;
 import com.example.vehicleassistant.engine.PromptBuilder;
+import com.example.vehicleassistant.engine.VideoSearchHelper;
 import com.example.vehicleassistant.model.ChatMessage;
 import com.example.vehicleassistant.vehicle.FunctionRegistry;
 import com.example.vehicleassistant.vehicle.VehicleService;
@@ -81,6 +82,15 @@ public class AgentManager {
             long freeMem = rt.maxMemory() - (rt.totalMemory() - rt.freeMemory());
             if (freeMem < 200 * 1024 * 1024) { // 不足 200MB
                 callback.onResponse(new AgentResponse("内存不足，请清理后台应用后重试", null, true));
+                return;
+            }
+
+            // 视频搜索关键词拦截 — 在模型推理前处理
+            String videoKeyword = VideoSearchHelper.extractKeyword(userInput);
+            if (videoKeyword != null) {
+                Log.d(TAG, "Video search: " + videoKeyword);
+                callback.onResponse(AgentResponse.videoSearch(
+                    "已为您找到以下视频结果", videoKeyword));
                 return;
             }
 
