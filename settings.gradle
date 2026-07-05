@@ -19,3 +19,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "VehicleAssistant"
 include ':app'
+include(":localLibs:sparkaar", ":localLibs:codecaar")
+include(":voicekit")
