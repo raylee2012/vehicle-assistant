@@ -8,9 +8,9 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
 import com.example.vehicleassistant.agent.AgentManager;
-import com.example.vehicleassistant.agent.AgentResponse;
 import com.example.vehicleassistant.engine.LlamaEngine;
 import com.example.vehicleassistant.model.ModelConfig;
+import com.example.vehicleassistant.model.ModelDownloadManager;
 import com.example.vehicleassistant.vehicle.FunctionRegistry;
 import com.example.vehicleassistant.vehicle.VehicleService;
 import com.example.vehicleassistant.vehicle.VehicleState;
@@ -20,16 +20,35 @@ import java.io.File;
 public class MainViewModel extends AndroidViewModel {
 
     private final MutableLiveData<String> statusText = new MutableLiveData<>("正在初始化...");
-    private final MutableLiveData<ChatAdapter.ChatItem> newMessage = new MutableLiveData<>();
     private final MutableLiveData<Boolean> inputEnabled = new MutableLiveData<>(false);
+
+    // 下载相关状态
+    private final MutableLiveData<Boolean> downloadVisible = new MutableLiveData<>(false);
+    private final MutableLiveData<Boolean> downloadActive = new MutableLiveData<>(false);
+    private final MutableLiveData<Integer> downloadProgress = new MutableLiveData<>(0);
+    private final MutableLiveData<String> downloadStatus = new MutableLiveData<>("");
 
     private AgentManager agentManager;
     private ChatAdapter adapter;
+    private ModelDownloadManager downloadManager;
+    private File modelFile;
 
     public MainViewModel(@NonNull Application application) {
         super(application);
         adapter = new ChatAdapter();
-        initEngine(application);
+        downloadManager = new ModelDownloadManager();
+
+        File modelDir = new File(application.getExternalFilesDir(null), "models");
+        modelFile = new File(modelDir, "qwen2.5-1.5b-instruct-q4_k_m.gguf");
+
+        if (modelFile.exists()) {
+            downloadVisible.setValue(false);
+            initEngine(application);
+        } else {
+            downloadVisible.setValue(true);
+            downloadStatus.setValue("需下载模型文件（约1.5GB）");
+            statusText.setValue("模型未下载");
+        }
     }
 
     private void initEngine(Application app) {
@@ -37,12 +56,9 @@ public class MainViewModel extends AndroidViewModel {
             try {
                 statusText.postValue("正在加载模型...");
 
-                // 模型路径: 外部存储或 app 私有目录
-                File modelDir = new File(app.getExternalFilesDir(null), "models");
-                File modelFile = new File(modelDir, "qwen2.5-1.5b-instruct-q4_k_m.gguf");
-
                 if (!modelFile.exists()) {
-                    statusText.postValue("模型文件未找到，请下载到: " + modelFile.getAbsolutePath());
+                    statusText.postValue("模型文件未找到");
+                    downloadVisible.postValue(true);
                     return;
                 }
 
@@ -58,10 +74,47 @@ public class MainViewModel extends AndroidViewModel {
 
                 statusText.postValue("就绪");
                 inputEnabled.postValue(true);
+                downloadVisible.postValue(false);
             } catch (Exception e) {
                 statusText.postValue("初始化失败: " + e.getMessage());
             }
         }).start();
+    }
+
+    public void startDownload() {
+        if (modelFile.exists()) {
+            downloadVisible.setValue(false);
+            initEngine(getApplication());
+            return;
+        }
+
+        downloadActive.setValue(true);
+        downloadStatus.setValue("正在下载... 0%");
+        statusText.setValue("下载模型中...");
+
+        downloadManager.download(ModelDownloadManager.DEFAULT_MODEL_URL, modelFile,
+            new ModelDownloadManager.DownloadCallback() {
+                @Override
+                public void onProgress(int percent, long downloadedBytes, long totalBytes) {
+                    downloadProgress.setValue(percent);
+                    downloadStatus.setValue("正在下载... " + percent + "%");
+                }
+
+                @Override
+                public void onComplete(File file) {
+                    downloadActive.setValue(false);
+                    downloadVisible.setValue(false);
+                    statusText.setValue("下载完成，正在加载...");
+                    initEngine(getApplication());
+                }
+
+                @Override
+                public void onError(String message) {
+                    downloadActive.setValue(false);
+                    downloadStatus.setValue("下载失败: " + message);
+                    statusText.setValue("下载失败");
+                }
+            });
     }
 
     public void sendMessage(String text) {
@@ -83,6 +136,10 @@ public class MainViewModel extends AndroidViewModel {
 
     public LiveData<String> getStatusText() { return statusText; }
     public LiveData<Boolean> getInputEnabled() { return inputEnabled; }
+    public LiveData<Boolean> getDownloadVisible() { return downloadVisible; }
+    public LiveData<Boolean> getDownloadActive() { return downloadActive; }
+    public LiveData<Integer> getDownloadProgress() { return downloadProgress; }
+    public LiveData<String> getDownloadStatus() { return downloadStatus; }
     public ChatAdapter getAdapter() { return adapter; }
 
     @Override
@@ -90,6 +147,9 @@ public class MainViewModel extends AndroidViewModel {
         super.onCleared();
         if (agentManager != null) {
             agentManager.shutdown();
+        }
+        if (downloadManager != null) {
+            downloadManager.cancel();
         }
     }
 }
