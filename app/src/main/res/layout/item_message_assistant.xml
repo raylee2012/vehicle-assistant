@@ -4,23 +4,72 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="start"
-    android:padding="8dp">
+    android:paddingStart="@dimen/spacing_small"
+    android:paddingEnd="@dimen/bubble_side_margin"
+    android:paddingTop="@dimen/bubble_gap"
+    android:paddingBottom="@dimen/bubble_gap">
 
     <LinearLayout
-        android:id="@+id/ll_execution_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:visibility="gone" />
-
-    <TextView
-        android:id="@+id/tv_message"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:maxWidth="280dp"
-        android:padding="12dp"
-        android:textSize="16sp"
-        android:textColor="#FFF"
+        android:maxWidth="@dimen/bubble_max_width"
+        android:orientation="vertical"
         android:background="@drawable/bg_assistant_bubble"
-        android:text="助手消息" />
+        android:padding="@dimen/bubble_padding">
+
+        <!-- 思考区域 — 在回复文字上方 -->
+        <LinearLayout
+            android:id="@+id/reasoning_header"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/reasoning_toggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="▶"
+                android:textColor="@color/hint_text"
+                android:textSize="@dimen/body_small" />
+
+            <TextView
+                android:id="@+id/reasoning_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="正在思考…"
+                android:textColor="@color/hint_text"
+                android:textSize="@dimen/body_small" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/reasoning_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/hint_text"
+            android:textSize="@dimen/body_small"
+            android:lineSpacingExtra="2dp"
+            android:visibility="gone" />
+
+        <View
+            android:id="@+id/reasoning_divider"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="6dp"
+            android:background="@color/divider"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tv_message"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/body_medium"
+            android:textColor="@color/bubble_ai_text"
+            android:text="assistant message" />
+
+    </LinearLayout>
 </LinearLayout>

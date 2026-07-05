@@ -3,17 +3,54 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#1A1A2E">
+    android:background="@color/background">
 
-    <TextView
-        android:id="@+id/tv_status"
+    <!-- 顶部标题栏 -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="12dp"
-        android:text="模型加载中..."
-        android:textColor="#888"
-        android:textSize="14sp"
-        android:gravity="center" />
+        android:orientation="vertical"
+        android:background="@color/primary"
+        android:fitsSystemWindows="true"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:layout_marginEnd="5dp"
+                android:background="@drawable/bg_dot_status_white" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textColor="@color/on_primary"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:text="@string/model_loading"
+            android:textColor="#B3FFFFFF"
+            android:textSize="@dimen/body_small" />
+    </LinearLayout>
+
+    <!-- 标题栏分隔线 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:background="@color/divider" />
 
     <LinearLayout
         android:id="@+id/ll_download"
@@ -21,8 +58,8 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:visibility="gone"
-        android:padding="16dp"
-        android:background="#16213E">
+        android:padding="@dimen/spacing_medium"
+        android:background="@color/surface">
 
         <ProgressBar
             android:id="@+id/pb_download"
@@ -37,8 +74,8 @@
             android:id="@+id/tv_download_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#AAA"
-            android:textSize="12sp"
+            android:textColor="@color/on_surface_variant"
+            android:textSize="@dimen/body_small"
             android:gravity="center"
             android:text="需下载模型文件（约1.5GB）"
             android:padding="8dp" />
@@ -48,9 +85,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:text="下载模型"
-            android:textColor="#FFF"
-            android:backgroundTint="#0F3460" />
+            android:text="@string/download_model"
+            android:textColor="@color/on_primary"
+            android:backgroundTint="@color/primary" />
 
     </LinearLayout>
 
@@ -59,60 +96,65 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:padding="12dp"
+        android:paddingLeft="@dimen/spacing_medium"
+        android:paddingRight="@dimen/spacing_medium"
+        android:paddingTop="@dimen/spacing_small"
+        android:paddingBottom="@dimen/spacing_small"
         android:clipToPadding="false" />
 
+    <!-- 输入栏顶部分隔线 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:background="@color/divider" />
+
+    <!-- 底部输入栏 -->
     <LinearLayout
+        android:id="@+id/input_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="12dp"
-        android:background="#16213E"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:background="@android:color/transparent"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <ImageView
+            android:id="@+id/btn_mic"
+            android:layout_width="@dimen/input_button_size"
+            android:layout_height="@dimen/input_button_size"
+            android:background="@drawable/bg_circle_mic"
+            android:gravity="center"
+            android:src="@drawable/ic_waveform"
+            android:scaleType="center" />
 
         <EditText
             android:id="@+id/et_input"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="@dimen/input_field_height"
             android:layout_weight="1"
-            android:hint="输入指令..."
-            android:textColor="#FFF"
-            android:textColorHint="#666"
-            android:background="@android:color/transparent"
-            android:padding="12dp"
-            android:maxLines="3" />
+            android:layout_marginStart="@dimen/spacing_extra_small"
+            android:layout_marginEnd="@dimen/spacing_extra_small"
+            android:background="@drawable/bg_input_pill"
+            android:hint="@string/hint_input"
+            android:textColorHint="@color/hint_text"
+            android:textColor="@color/on_surface"
+            android:maxLines="1"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:textSize="@dimen/body_medium"
+            android:textCursorDrawable="@drawable/cursor_primary" />
 
-        <FrameLayout
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp">
-
-            <Button
-                android:id="@+id/btn_mic"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:text="&#x1F3A4;"
-                android:textSize="20sp"
-                android:backgroundTint="#0F3460"
-                android:padding="0dp"
-                android:visibility="visible" />
-
-            <com.airbnb.lottie.LottieAnimationView
-                android:id="@+id/lottie_waveform"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:visibility="gone"
-                android:scaleType="centerCrop" />
-
-        </FrameLayout>
-
-        <Button
+        <TextView
             android:id="@+id/btn_send"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="发送"
-            android:textColor="#FFF"
-            android:backgroundTint="#0F3460" />
-
+            android:layout_width="@dimen/input_button_size"
+            android:layout_height="@dimen/input_button_size"
+            android:background="@drawable/bg_circle_send"
+            android:gravity="center"
+            android:text="➤"
+            android:textColor="@color/on_primary"
+            android:textSize="18sp" />
     </LinearLayout>
 </LinearLayout>

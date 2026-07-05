@@ -4,16 +4,19 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="end"
-    android:padding="8dp">
+    android:paddingStart="@dimen/bubble_side_margin"
+    android:paddingEnd="@dimen/spacing_small"
+    android:paddingTop="@dimen/bubble_gap"
+    android:paddingBottom="@dimen/bubble_gap">
 
     <TextView
         android:id="@+id/tv_message"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:maxWidth="280dp"
-        android:padding="12dp"
-        android:textSize="16sp"
-        android:textColor="#FFF"
+        android:maxWidth="@dimen/bubble_max_width"
+        android:padding="@dimen/bubble_padding"
+        android:textSize="@dimen/body_medium"
+        android:textColor="@color/bubble_user_text"
         android:background="@drawable/bg_user_bubble"
         android:text="用户消息" />
 </LinearLayout>

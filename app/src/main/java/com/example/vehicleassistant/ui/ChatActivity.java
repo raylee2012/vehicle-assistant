@@ -1,12 +1,14 @@
 package com.example.vehicleassistant.ui;
 
 import android.Manifest;
+import android.animation.ValueAnimator;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -20,8 +22,6 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.airbnb.lottie.LottieAnimationView;
-import com.airbnb.lottie.LottieDrawable;
 import com.example.vehicleassistant.R;
 import com.example.vehicleassistant.databinding.ActivityChatBinding;
 
@@ -32,14 +32,14 @@ public class ChatActivity extends AppCompatActivity {
     private ChatAdapter adapter;
     private RecyclerView rvChat;
     private EditText etInput;
-    private Button btnSend;
+    private TextView btnSend;
     private TextView tvStatus;
     private LinearLayout llDownload;
     private ProgressBar pbDownload;
     private Button btnDownload;
     private TextView tvDownloadStatus;
-    private Button btnMic;
-    private LottieAnimationView lottieWaveform;
+    private ImageView btnMic;
+    private ValueAnimator voicePulseAnimator;
 
     // Critical 1: RECORD_AUDIO runtime permission launcher
     private final ActivityResultLauncher<String> requestRecordAudioLauncher =
@@ -54,6 +54,8 @@ public class ChatActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
         binding = ActivityChatBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
@@ -66,12 +68,6 @@ public class ChatActivity extends AppCompatActivity {
         btnDownload = binding.btnDownload;
         tvDownloadStatus = binding.tvDownloadStatus;
         btnMic = binding.btnMic;
-        lottieWaveform = binding.lottieWaveform;
-
-        // 初始化 Lottie 动画
-        lottieWaveform.setAnimation(R.raw.lottie_waveform);
-        lottieWaveform.setRepeatCount(LottieDrawable.INFINITE);
-        lottieWaveform.setRepeatMode(LottieDrawable.RESTART);
 
         viewModel = new ViewModelProvider(this,
                 ViewModelProvider.AndroidViewModelFactory.getInstance(this.getApplication()))
@@ -84,16 +80,8 @@ public class ChatActivity extends AppCompatActivity {
         // 状态文本
         viewModel.getStatusText().observe(this, status -> tvStatus.setText(status));
 
-        // Critical 3: 输入启用状态 — 配合 updateMicVisibility 控制麦克风可见性
-        viewModel.getInputEnabled().observe(this, enabled -> {
-            updateMicVisibility();
-            updateInputState();
-        });
-
-        // Critical 3: 专用 voiceKitReady 观察者 — 解决 init 异步竞态导致麦克风永不显示
-        viewModel.getVoiceKitReady().observe(this, ready -> {
-            updateMicVisibility();
-        });
+        // 输入启用状态 → 按钮样式
+        viewModel.getInputEnabled().observe(this, enabled -> applyButtonStates());
 
         // 下载区域可见性
         viewModel.getDownloadVisible().observe(this, visible ->
@@ -119,7 +107,7 @@ public class ChatActivity extends AppCompatActivity {
         // 发送按钮
         btnSend.setOnClickListener(v -> sendMessage());
 
-        // Critical 1: 麦克风按钮 — 检查 RECORD_AUDIO 权限后再触发放/停录音
+        // 麦克风按钮 — 检查 RECORD_AUDIO 权限后再触发放/停录音
         btnMic.setOnClickListener(v -> {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                     == PackageManager.PERMISSION_GRANTED) {
@@ -129,18 +117,14 @@ public class ChatActivity extends AppCompatActivity {
             }
         });
 
-        // ASR 录音状态 → 驱动 麦克风/Lottie 互斥显示 + 输入禁用
+        // ASR 录音状态 → 脉冲动画 + 按钮样式
         viewModel.getAsrListening().observe(this, listening -> {
             if (listening != null && listening) {
-                btnMic.setVisibility(View.GONE);
-                lottieWaveform.setVisibility(View.VISIBLE);
-                lottieWaveform.playAnimation();
+                startPulseAnimation();
             } else {
-                lottieWaveform.cancelAnimation();
-                lottieWaveform.setVisibility(View.GONE);
-                updateMicVisibility();
+                stopPulseAnimation();
             }
-            updateInputState();
+            applyButtonStates();
         });
 
         // ASR 识别结果 → 填入输入框
@@ -170,25 +154,55 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
-    /**
-     * Critical 3: 综合判断 inputEnabled + voiceKitReady + !asrListening 后决定麦克风可见性。
-     * 三个 LiveData 观察者 (inputEnabled / voiceKitReady / asrListening) 均调用此方法，
-     * 解决 VoiceKit 异步初始化竞态导致麦克风永不出现的问题。
-     */
-    private void updateMicVisibility() {
-        boolean showMic = Boolean.TRUE.equals(viewModel.getInputEnabled().getValue())
-                && Boolean.TRUE.equals(viewModel.getVoiceKitReady().getValue())
-                && !Boolean.TRUE.equals(viewModel.getAsrListening().getValue());
-        btnMic.setVisibility(showMic ? View.VISIBLE : View.GONE);
+    private void applyButtonStates() {
+        boolean isProcessing = !Boolean.TRUE.equals(viewModel.getInputEnabled().getValue());
+        boolean isRecording = Boolean.TRUE.equals(viewModel.getAsrListening().getValue());
+
+        // 麦克风 + 发送按钮：模型未就绪时状态一致
+        btnMic.setVisibility(View.VISIBLE);
+        if (!isRecording) {
+            btnMic.setEnabled(!isProcessing);
+            btnMic.setAlpha(isProcessing ? 0.5f : 1.0f);
+        }
+
+        btnSend.setEnabled(!isProcessing);
+        btnSend.setAlpha(isProcessing ? 0.5f : 1.0f);
+
+        // 输入框
+        etInput.setEnabled(!isProcessing && !isRecording);
     }
 
-    // 辅助方法：输入框和发送按钮只有在"模型就绪 + 不在录音中"才可用
-    private void updateInputState() {
-        Boolean inputOk = viewModel.getInputEnabled().getValue();
-        Boolean asrOn = viewModel.getAsrListening().getValue();
-        boolean enabled = inputOk != null && inputOk && (asrOn == null || !asrOn);
-        etInput.setEnabled(enabled);
-        btnSend.setEnabled(enabled);
+    private void startPulseAnimation() {
+        btnMic.post(() -> {
+            if (btnMic.getBackground() != null) {
+                btnMic.getBackground().setTint(
+                        ContextCompat.getColor(ChatActivity.this, R.color.voice_recording_red));
+            }
+            if (voicePulseAnimator == null) {
+                voicePulseAnimator = ValueAnimator.ofFloat(1f, 0.4f);
+                voicePulseAnimator.setDuration(600);
+                voicePulseAnimator.setRepeatMode(ValueAnimator.REVERSE);
+                voicePulseAnimator.setRepeatCount(ValueAnimator.INFINITE);
+                voicePulseAnimator.addUpdateListener(anim ->
+                        btnMic.setAlpha((float) anim.getAnimatedValue()));
+            }
+            if (!voicePulseAnimator.isStarted()) {
+                voicePulseAnimator.start();
+            }
+        });
+    }
+
+    private void stopPulseAnimation() {
+        btnMic.post(() -> {
+            if (voicePulseAnimator != null) {
+                voicePulseAnimator.cancel();
+            }
+            btnMic.setAlpha(1f);
+            if (btnMic.getBackground() != null) {
+                btnMic.getBackground().setTint(
+                        ContextCompat.getColor(ChatActivity.this, R.color.primary));
+            }
+        });
     }
 
     private void sendMessage() {
@@ -203,12 +217,15 @@ public class ChatActivity extends AppCompatActivity {
         super.onPause();
         // 场景1: 录音中切后台 → 自动停止
         viewModel.stopListeningOnPause();
+        stopPulseAnimation();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Important 5: 停止 TTS 播放
+        if (voicePulseAnimator != null) {
+            voicePulseAnimator.cancel();
+        }
         viewModel.stopTts();
         binding = null;
     }

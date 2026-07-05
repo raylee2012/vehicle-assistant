@@ -159,10 +159,11 @@ public class MainViewModel extends AndroidViewModel {
         adapter.addUserMessage(text);
         inputEnabled.setValue(false);
         statusText.setValue("思考中...");
+        final int placeholderPos = adapter.addThinkingPlaceholder();
 
         agentManager.receive(text, response -> {
             mainHandler.post(() -> {
-                adapter.addAssistantMessage(response.text, response.execResults);
+                adapter.finishThinking(placeholderPos, response.text, response.execResults);
                 inputEnabled.setValue(true);
                 statusText.setValue("就绪");
 

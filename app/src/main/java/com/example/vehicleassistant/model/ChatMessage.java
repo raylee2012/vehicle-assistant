@@ -6,7 +6,7 @@ public class ChatMessage {
     public static final String ROLE_ASSISTANT = "assistant";
 
     public final String role;
-    public final String content;
+    public String content;
     public final long timestamp;
 
     public ChatMessage(String role, String content) {

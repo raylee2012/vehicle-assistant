@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#007AFF</color>
+    <color name="on_primary">#003D80</color>
+    <color name="primary_container">#003D7A</color>
+    <color name="on_primary_container">#CCE5FF</color>
+    <color name="secondary">#CCC2DC</color>
+    <color name="on_secondary">#332D41</color>
+    <color name="secondary_container">#4A4458</color>
+    <color name="on_secondary_container">#E8DEF8</color>
+    <color name="tertiary">#EFB8C8</color>
+    <color name="on_tertiary">#492532</color>
+    <color name="tertiary_container">#633B48</color>
+    <color name="on_tertiary_container">#FFD8E4</color>
+    <color name="background">#121212</color>
+    <color name="on_background">#E6E1E5</color>
+    <color name="surface">#212121</color>
+    <color name="on_surface">#E6E1E5</color>
+    <color name="surface_variant">#2C2C2E</color>
+    <color name="on_surface_variant">#CAC4D0</color>
+    <color name="error">#F2B8B5</color>
+    <color name="on_error">#601410</color>
+    <color name="error_container">#8C1D18</color>
+    <color name="on_error_container">#F9DEDC</color>
+    <color name="outline">#938F99</color>
+    <color name="outline_variant">#49454F</color>
+    <color name="divider">#3A3A3C</color>
+    <color name="bubble_ai">#2C2C2E</color>
+    <color name="bubble_ai_text">#E6E1E5</color>
+    <color name="hint_text">#636366</color>
+</resources>
