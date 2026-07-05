@@ -160,6 +160,9 @@ Java_com_example_vehicleassistant_engine_LlamaEngine_nativeInfer(
     LOGD("分词完成: %d tokens (ctx=%d)", n_tokens, llama_n_ctx(ctx->ctx));
 
     // --- 第 2 步：Prefill（批量推理输入 token）---
+    // 先清零 KV cache，避免多次推理间缓存累积超出 n_ctx 限制
+    llama_memory_clear(llama_get_memory(ctx->ctx), true);
+
     // 每次最多处理 512 个 token，超长输入分多批执行
     const int n_batch = 512;
     for (size_t i = 0; i < tokens.size(); i += n_batch) {
