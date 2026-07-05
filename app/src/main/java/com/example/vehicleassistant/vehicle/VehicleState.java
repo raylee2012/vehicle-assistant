@@ -57,7 +57,7 @@ public class VehicleState {
     public String wiperSpeed = "off";
 
     // --- 安全状态 ---
-    public boolean isParked = true;  // Mock: 始终为驻车状态
+    public boolean isParked = true;  // 当前 mock 为 true，始终驻车。接入真实传感器后改为实际值
 
     public VehicleState() {
         // 初始化车窗默认值

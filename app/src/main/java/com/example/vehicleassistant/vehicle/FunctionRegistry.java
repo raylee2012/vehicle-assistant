@@ -213,7 +213,11 @@ public class FunctionRegistry {
             }
             arr.put(obj);
         }
-        cachedSchema = arr.toString(2);
+        try {
+            cachedSchema = arr.toString(2);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize schema", e);
+        }
     }
 
     public String generateToolsSchema() {

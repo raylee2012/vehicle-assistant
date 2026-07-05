@@ -1,7 +1,6 @@
 package com.example.vehicleassistant.ui;
 
 import android.os.Bundle;
-import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
@@ -12,7 +11,6 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.vehicleassistant.R;
 import com.example.vehicleassistant.databinding.ActivityChatBinding;
 
 public class ChatActivity extends AppCompatActivity {
@@ -36,7 +34,9 @@ public class ChatActivity extends AppCompatActivity {
         btnSend = binding.btnSend;
         tvStatus = binding.tvStatus;
 
-        viewModel = new ViewModelProvider(this).get(MainViewModel.class);
+        viewModel = new ViewModelProvider(this,
+                ViewModelProvider.AndroidViewModelFactory.getInstance(this.getApplication()))
+                .get(MainViewModel.class);
         adapter = viewModel.getAdapter();
 
         rvChat.setLayoutManager(new LinearLayoutManager(this));
