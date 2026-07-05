@@ -93,9 +93,9 @@ public class VehicleService {
     private String checkIdempotent(String action, Map<String, Object> params) {
         switch (action) {
             case "set_ac": {
-                Boolean power = (Boolean) params.get("power");
+                Boolean power = params.containsKey("power") ? (Boolean) params.get("power") : null;
                 if (power != null && power && state.acPower) {
-                    Number temp = (Number) params.get("temp");
+                    Number temp = params.containsKey("temp") ? (Number) params.get("temp") : null;
                     if (temp != null && temp.intValue() == state.acTemp) {
                         return "空调已处于开启状态，温度 " + state.acTemp + " 度";
                     }
@@ -127,6 +127,28 @@ public class VehicleService {
                 if ("unlock".equals(act) && !state.doorLocked) return "车门已解锁";
                 break;
             }
+            case "control_sunroof": {
+                String act = (String) params.get("action");
+                if ("close".equals(act) && !state.sunroofOpen) return "天窗已关闭";
+                if ("open".equals(act) && state.sunroofOpen) return "天窗已开启";
+                break;
+            }
+            case "fold_mirror": {
+                Boolean power = params.containsKey("power") ? (Boolean) params.get("power") : null;
+                if (power != null && power && state.mirrorFolded) return "后视镜已折叠";
+                if (power != null && !power && !state.mirrorFolded) return "后视镜已展开";
+                break;
+            }
+            case "drive_mode": {
+                String mode = (String) params.get("mode");
+                if (mode != null && mode.equals(state.driveMode)) return "驾驶模式已经是 " + mode;
+                break;
+            }
+            case "wiper": {
+                String speed = (String) params.get("speed");
+                if (speed != null && speed.equals(state.wiperSpeed)) return "雨刮器已是 " + speed + " 模式";
+                break;
+            }
         }
         return null;
     }
@@ -139,99 +161,109 @@ public class VehicleService {
                 if (params.containsKey("mode")) state.acMode = (String) params.get("mode");
                 break;
             case "set_fan_speed":
-                state.fanSpeed = ((Number) params.get("level")).intValue();
-                break;
-            case "set_air_circulation":
-                state.airCirculation = (String) params.get("mode");
+                if (params.containsKey("level")) state.fanSpeed = ((Number) params.get("level")).intValue();
                 break;
             case "defrost":
-                String pos = (String) params.get("position");
-                Boolean pw = (Boolean) params.get("power");
-                if ("front".equals(pos) || "both".equals(pos)) state.frontDefrost = pw;
-                if ("rear".equals(pos) || "both".equals(pos)) state.rearDefrost = pw;
-                break;
-            case "seat_heat":
-                state.seatHeatLevel.put((String) params.get("seat"),
-                    ((Number) params.get("level")).intValue());
-                break;
-            case "seat_vent":
-                state.seatVentLevel.put((String) params.get("seat"),
-                    ((Number) params.get("level")).intValue());
-                break;
-            case "steering_heat":
-                state.steeringHeat = (Boolean) params.get("power");
+                if (params.containsKey("position")) {
+                    String pos = (String) params.get("position");
+                    Boolean pw = params.containsKey("power") ? (Boolean) params.get("power") : true;
+                    if ("front".equals(pos) || "both".equals(pos)) state.frontDefrost = pw;
+                    if ("rear".equals(pos) || "both".equals(pos)) state.rearDefrost = pw;
+                }
                 break;
             case "control_window":
-                String wPos = (String) params.get("position");
-                String wAct = (String) params.get("action");
-                int wPct = 0;
-                if (params.containsKey("percent")) {
-                    wPct = ((Number) params.get("percent")).intValue();
-                } else if ("open".equals(wAct)) {
-                    wPct = 100;
-                }
-                if ("all".equals(wPos)) {
-                    for (String k : state.windowPercent.keySet()) {
-                        state.windowPercent.put(k, wPct);
+                if (params.containsKey("position") && params.containsKey("action")) {
+                    String wPos = (String) params.get("position");
+                    String wAct = (String) params.get("action");
+                    int wPct = 0;
+                    if (params.containsKey("percent")) {
+                        wPct = ((Number) params.get("percent")).intValue();
+                    } else if ("open".equals(wAct)) {
+                        wPct = 100;
                     }
-                } else {
-                    state.windowPercent.put(wPos, wPct);
+                    if ("all".equals(wPos)) {
+                        for (String k : state.windowPercent.keySet()) {
+                            state.windowPercent.put(k, wPct);
+                        }
+                    } else {
+                        state.windowPercent.put(wPos, wPct);
+                    }
                 }
                 break;
             case "control_door_lock":
-                state.doorLocked = "lock".equals(params.get("action"));
-                break;
-            case "control_trunk":
-                state.trunkOpen = "open".equals(params.get("action"));
+                if (params.containsKey("action")) state.doorLocked = "lock".equals(params.get("action"));
                 break;
             case "control_sunroof":
-                String sAct = (String) params.get("action");
-                state.sunroofOpen = "open".equals(sAct) || "tilt".equals(sAct);
+                if (params.containsKey("action")) {
+                    String sAct = (String) params.get("action");
+                    state.sunroofOpen = "open".equals(sAct) || "tilt".equals(sAct);
+                }
                 if (params.containsKey("percent")) {
                     state.sunroofPercent = ((Number) params.get("percent")).intValue();
                 }
                 break;
-            case "child_lock":
-                state.childLock = (Boolean) params.get("power");
-                break;
-            case "adjust_seat":
-                String seatKey = params.get("seat") + ":" + params.get("direction");
-                Integer currentSteps = state.seatPosition.getOrDefault(seatKey, 0);
-                state.seatPosition.put(seatKey, currentSteps + ((Number) params.get("steps")).intValue());
-                break;
-            case "memory_seat":
-                state.memorySeatProfile = ((Number) params.get("profile")).intValue();
-                break;
-            case "adjust_mirror":
-                state.mirrorPosition.put((String) params.get("mirror"), (String) params.get("direction"));
-                break;
             case "fold_mirror":
-                state.mirrorFolded = (Boolean) params.get("power");
-                break;
-            case "ambient_light":
-                state.ambientColor = (String) params.get("color");
-                state.ambientBrightness = ((Number) params.get("brightness")).intValue();
+                if (params.containsKey("power")) state.mirrorFolded = (Boolean) params.get("power");
                 break;
             case "control_headlight":
-                state.headlightMode = (String) params.get("mode");
-                break;
-            case "control_fog_light":
-                state.fogLight = (Boolean) params.get("power");
-                break;
-            case "hazard_light":
-                state.hazardLight = (Boolean) params.get("power");
+                if (params.containsKey("mode")) state.headlightMode = (String) params.get("mode");
                 break;
             case "drive_mode":
-                state.driveMode = (String) params.get("mode");
-                break;
-            case "cruise_control":
-                state.cruiseOn = (Boolean) params.get("power");
-                if (params.containsKey("speed")) {
-                    state.cruiseSpeed = ((Number) params.get("speed")).intValue();
-                }
+                if (params.containsKey("mode")) state.driveMode = (String) params.get("mode");
                 break;
             case "wiper":
-                state.wiperSpeed = (String) params.get("speed");
+                if (params.containsKey("speed")) state.wiperSpeed = (String) params.get("speed");
+                break;
+            // 以下方法暂未在 FunctionRegistry 注册，保留无参保护
+            case "set_air_circulation":
+                if (params.containsKey("mode")) state.airCirculation = (String) params.get("mode");
+                break;
+            case "seat_heat":
+                if (params.containsKey("seat") && params.containsKey("level"))
+                    state.seatHeatLevel.put((String) params.get("seat"),
+                        ((Number) params.get("level")).intValue());
+                break;
+            case "seat_vent":
+                if (params.containsKey("seat") && params.containsKey("level"))
+                    state.seatVentLevel.put((String) params.get("seat"),
+                        ((Number) params.get("level")).intValue());
+                break;
+            case "steering_heat":
+                if (params.containsKey("power")) state.steeringHeat = (Boolean) params.get("power");
+                break;
+            case "control_trunk":
+                if (params.containsKey("action")) state.trunkOpen = "open".equals(params.get("action"));
+                break;
+            case "child_lock":
+                if (params.containsKey("power")) state.childLock = (Boolean) params.get("power");
+                break;
+            case "adjust_seat":
+                if (params.containsKey("seat") && params.containsKey("direction") && params.containsKey("steps")) {
+                    String seatKey = params.get("seat") + ":" + params.get("direction");
+                    Integer currentSteps = state.seatPosition.getOrDefault(seatKey, 0);
+                    state.seatPosition.put(seatKey, currentSteps + ((Number) params.get("steps")).intValue());
+                }
+                break;
+            case "memory_seat":
+                if (params.containsKey("profile")) state.memorySeatProfile = ((Number) params.get("profile")).intValue();
+                break;
+            case "adjust_mirror":
+                if (params.containsKey("mirror") && params.containsKey("direction"))
+                    state.mirrorPosition.put((String) params.get("mirror"), (String) params.get("direction"));
+                break;
+            case "ambient_light":
+                if (params.containsKey("color")) state.ambientColor = (String) params.get("color");
+                if (params.containsKey("brightness")) state.ambientBrightness = ((Number) params.get("brightness")).intValue();
+                break;
+            case "control_fog_light":
+                if (params.containsKey("power")) state.fogLight = (Boolean) params.get("power");
+                break;
+            case "hazard_light":
+                if (params.containsKey("power")) state.hazardLight = (Boolean) params.get("power");
+                break;
+            case "cruise_control":
+                if (params.containsKey("power")) state.cruiseOn = (Boolean) params.get("power");
+                if (params.containsKey("speed")) state.cruiseSpeed = ((Number) params.get("speed")).intValue();
                 break;
         }
     }
