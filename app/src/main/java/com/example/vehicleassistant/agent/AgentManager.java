@@ -91,35 +91,29 @@ public class AgentManager {
                     registry.generateToolsSchema(), stateSummary);
             }
 
-            // --- 第一次推理（意图提取）---
-            String firstPrompt = promptBuilder.buildFirstInferencePrompt(
-                cachedSystemPrompt, contextManager.getHistory(), userInput);
-            Log.d(TAG, "First inference... prompt=" + firstPrompt.length() + "chars, schema="
-                + cachedSystemPrompt.length() + "chars");
-            String firstOutput = engine.infer(firstPrompt);
-            Log.d(TAG, "First output(" + firstOutput.length() + "chars): " + firstOutput);
+            // --- 意图提取：优先关键词匹配（确定性），模型兜底 ---
+            String mockJson = mockExtractor.extract(userInput);
+            OutputParser.ParseResult parseResult;
+            String firstOutput;  // 第一次推理输出，用于第二次推理 prompt
 
-            // 骨架占位检测：如果是硬编码的占位输出，使用关键词 mock 推理
-            if (SKELETON_PLACEHOLDER.equals(firstOutput.trim())) {
-                String mockJson = mockExtractor.extract(userInput);
-                if (mockJson != null) {
-                    firstOutput = mockJson;
-                    Log.d(TAG, "使用 mock 推理: " + mockJson);
-                }
-            }
+            if (mockJson != null) {
+                // 关键词命中 → 直接用 mock 结果，不走模型第一次推理
+                firstOutput = mockJson;
+                parseResult = outputParser.parse(mockJson);
+                Log.d(TAG, "Mock intent: " + mockJson);
+            } else {
+                // 未命中关键词 → 模型推理
+                String firstPrompt = promptBuilder.buildFirstInferencePrompt(
+                    cachedSystemPrompt, contextManager.getHistory(), userInput);
+                Log.d(TAG, "First inference... prompt=" + firstPrompt.length() + "chars, schema="
+                    + cachedSystemPrompt.length() + "chars");
+                firstOutput = engine.infer(firstPrompt);
+                Log.d(TAG, "First output(" + firstOutput.length() + "chars): " + firstOutput);
 
-            OutputParser.ParseResult parseResult = outputParser.parse(firstOutput);
-            Log.d(TAG, "Parse result: isCommands=" + parseResult.isCommands
-                + " commands=" + (parseResult.commands != null ? parseResult.commands.size() : 0)
-                + " text=" + (parseResult.text != null ? parseResult.text : "null"));
-
-            // 0.5B 模型可能输出文本而非 JSON，用关键词提取兜底
-            if (!parseResult.isCommands) {
-                String mockJson = mockExtractor.extract(userInput);
-                if (mockJson != null) {
-                    parseResult = outputParser.parse(mockJson);
-                    Log.d(TAG, "Mock fallback: " + mockJson);
-                }
+                parseResult = outputParser.parse(firstOutput);
+                Log.d(TAG, "Parse result: isCommands=" + parseResult.isCommands
+                    + " commands=" + (parseResult.commands != null ? parseResult.commands.size() : 0)
+                    + " text=" + (parseResult.text != null ? parseResult.text : "null"));
             }
 
             if (parseResult.isCommands) {

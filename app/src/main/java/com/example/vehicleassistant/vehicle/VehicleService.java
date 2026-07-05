@@ -269,7 +269,88 @@ public class VehicleService {
     }
 
     private String buildSuccessMessage(ToolDefinition def, Map<String, Object> params) {
-        return "执行成功: " + def.description + " → " + params;
+        switch (def.name) {
+            case "set_ac": {
+                Boolean power = (Boolean) params.get("power");
+                if (power != null && !power) return "空调已关闭";
+                StringBuilder sb = new StringBuilder("空调已开启");
+                Number temp = (Number) params.get("temp");
+                if (temp != null) sb.append("，温度 ").append(temp.intValue()).append(" 度");
+                String mode = (String) params.get("mode");
+                if (mode != null) {
+                    switch (mode) {
+                        case "auto": sb.append("，自动模式"); break;
+                        case "cool": sb.append("，制冷模式"); break;
+                        case "heat": sb.append("，制热模式"); break;
+                        case "fan": sb.append("，送风模式"); break;
+                    }
+                }
+                return sb.toString();
+            }
+            case "set_fan_speed": {
+                Number level = (Number) params.get("level");
+                return "风速已调至 " + (level != null ? level.intValue() : "?") + " 档";
+            }
+            case "control_window": {
+                String act = (String) params.get("action");
+                String pos = (String) params.get("position");
+                String posName = "all".equals(pos) ? "所有车窗" : (pos + " 车窗");
+                if ("close".equals(act)) return posName + " 已关闭";
+                if ("stop".equals(act)) return posName + " 已停止";
+                Number pct = (Number) params.get("percent");
+                if (pct != null) return posName + " 已打开 " + pct.intValue() + "%";
+                return posName + " 已打开";
+            }
+            case "control_door_lock": {
+                String act = (String) params.get("action");
+                return "lock".equals(act) ? "车门已上锁" : "车门已解锁";
+            }
+            case "control_sunroof": {
+                String act = (String) params.get("action");
+                if ("close".equals(act)) return "天窗已关闭";
+                if ("tilt".equals(act)) return "天窗已翘起";
+                return "天窗已打开";
+            }
+            case "fold_mirror": {
+                Boolean power = (Boolean) params.get("power");
+                return power != null && power ? "后视镜已折叠" : "后视镜已展开";
+            }
+            case "control_headlight": {
+                String mode = (String) params.get("mode");
+                switch (mode != null ? mode : "") {
+                    case "auto": return "大灯已设为自动";
+                    case "low": return "大灯已设为近光";
+                    case "high": return "大灯已设为远光";
+                    case "off": return "大灯已关闭";
+                    default: return "大灯已设置";
+                }
+            }
+            case "drive_mode": {
+                String mode = (String) params.get("mode");
+                return "驾驶模式已切换为 " + mode;
+            }
+            case "wiper": {
+                String speed = (String) params.get("speed");
+                switch (speed != null ? speed : "") {
+                    case "off": return "雨刮器已关闭";
+                    case "low": return "雨刮器已设为低速";
+                    case "medium": return "雨刮器已设为中速";
+                    case "high": return "雨刮器已设为高速";
+                    case "auto": return "雨刮器已设为自动";
+                    default: return "雨刮器已设置";
+                }
+            }
+            case "defrost": {
+                Boolean power = (Boolean) params.get("power");
+                if (power != null && !power) return "除霜已关闭";
+                String pos = (String) params.get("position");
+                if ("front".equals(pos)) return "前挡风除霜已开启";
+                if ("rear".equals(pos)) return "后挡风除霜已开启";
+                return "除霜已开启";
+            }
+            default:
+                return def.description + " 已执行";
+        }
     }
 
     public VehicleState getState() {
